@@ -3,96 +3,205 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; img-src 'self' data: file:; worker-src 'self' blob:;">
   <title>DocSlicer</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-
-    body {
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      background-color: #f4f6f8;
-      color: #333;
-    }
-
-    header {
-      background-color: #1e293b;
-      color: #fff;
-      padding: 1rem 1.5rem;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    main {
-      display: flex;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    .sidebar {
-      width: 280px;
-      background-color: #ffffff;
-      border-right: 1px solid #e2e8f0;
-      padding: 1.5rem;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .preview-area {
-      flex: 1;
-      padding: 2rem;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      background-color: #e2e8f0;
-    }
-
-    .placeholder {
-      text-align: center;
-      color: #64748b;
-    }
-
-    button {
-      background-color: #2563eb;
-      color: white;
-      border: none;
-      padding: 0.6rem 1.2rem;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: 500;
-    }
-
-    button:hover {
-      background-color: #1d4ed8;
-    }
-  </style>
+  <link rel="stylesheet" href="assets/css/bootstrap.min.css">
+  <link rel="stylesheet" href="assets/css/app.css">
 </head>
 <body>
-  <header>
-    <h1>DocSlicer</h1>
-    <button id="btn-open-pdf">Cargar PDF</button>
-  </header>
 
-  <main>
-    <aside class="sidebar">
-      <h3>Categorías y Páginas</h3>
-      <p id="status-text">Ningún archivo cargado</p>
-    </aside>
+  <!-- =================== CUSTOM TITLEBAR =================== -->
+  <div id="titlebar">
+    <div class="titlebar-logo">
+      <img src="assets/icon.png" alt="DocSlicer" class="titlebar-icon">
+      <span class="titlebar-title">DocSlicer</span>
+    </div>
+    <div class="titlebar-controls">
+      <button id="btn-minimize" class="titlebar-btn" title="Minimizar">
+        <i data-lucide="minus"></i>
+      </button>
+      <button id="btn-maximize" class="titlebar-btn" title="Maximizar">
+        <i data-lucide="square"></i>
+      </button>
+      <button id="btn-close" class="titlebar-btn titlebar-btn-close" title="Cerrar">
+        <i data-lucide="x"></i>
+      </button>
+    </div>
+  </div>
 
-    <section class="preview-area">
-      <div class="placeholder">
-        <p>Seleccioná un archivo PDF para comenzar a categorizar y recortar páginas.</p>
+  <!-- =================== VIEW: HOME =================== -->
+  <div id="view-home" class="view active">
+    <div class="home-container">
+      <div class="home-header">
+        <img src="assets/icon.png" alt="DocSlicer" class="home-logo">
+        <h1>DocSlicer</h1>
+        <p class="home-subtitle">Cargá, organizá y exportá las páginas de tus documentos PDF de forma rápida y sencilla.</p>
       </div>
-    </section>
-  </main>
 
-  <script src="renderer.js"></script>
+      <div class="dropzone" id="dropzone">
+        <i data-lucide="upload-cloud" class="dropzone-icon"></i>
+        <p class="dropzone-text">Arrastrá tu archivo PDF aquí</p>
+        <p class="dropzone-hint">o</p>
+        <button class="btn" id="btn-browse">Explorar archivo</button>
+      </div>
+
+      <div class="recent-section" id="recent-section" style="display: none;">
+        <h3 class="section-title">Recientes</h3>
+        <div class="recent-grid" id="recent-grid">
+          <!-- Tarjetas de historial renderizadas por JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== VIEW: EDITOR =================== -->
+  <div id="view-editor" class="view">
+    <div class="editor-header">
+      <div class="editor-header-left">
+        <button class="btn-icon" id="btn-back" title="Volver al inicio">
+          <i data-lucide="arrow-left"></i>
+        </button>
+        <span class="editor-filename" id="editor-filename">documento.pdf</span>
+      </div>
+      <div class="editor-header-right">
+        <button class="btn-icon" id="btn-undo" title="Deshacer (Ctrl+Z)">
+          <i data-lucide="undo-2"></i>
+        </button>
+        <button class="btn-icon" id="btn-redo" title="Rehacer (Ctrl+Y)">
+          <i data-lucide="redo-2"></i>
+        </button>
+        <button class="btn-icon" id="btn-select-all" title="Seleccionar todo (Ctrl+A)">
+          <i data-lucide="check-square"></i>
+        </button>
+        <button class="btn-icon" id="btn-group" title="Agrupar selección" disabled>
+          <i data-lucide="group"></i>
+        </button>
+        <button class="btn" id="btn-toggle-panel">
+          <i data-lucide="panel-right-close"></i>
+          <span>Panel</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="editor-body">
+      <div class="timeline-area">
+        <div class="timeline-container" id="timeline-container">
+          <!-- Tarjetas de páginas renderizadas por JS -->
+        </div>
+      </div>
+
+      <div class="side-panel" id="side-panel">
+        <div class="panel-header">
+          <h3>Grupos y Categorías</h3>
+          <button class="btn-sm btn-ghost" id="btn-manage-categories">
+            <i data-lucide="settings"></i> Gestionar
+          </button>
+        </div>
+
+        <div class="group-list" id="group-list">
+          <p class="text-muted" id="no-groups-msg">No hay grupos creados. Seleccioná páginas y hacé clic en "Agrupar".</p>
+        </div>
+
+        <div class="export-section">
+          <h4>Exportar</h4>
+          <div class="export-options">
+            <label class="radio-option">
+              <input type="radio" name="export-mode" value="flat" checked>
+              <span>Carpeta única</span>
+            </label>
+            <label class="radio-option">
+              <input type="radio" name="export-mode" value="subfolders">
+              <span>Subcarpetas por categoría</span>
+            </label>
+          </div>
+          <button class="btn btn-export" id="btn-export" disabled>
+            <i data-lucide="download"></i> Exportar PDFs
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== ZOOM MODAL =================== -->
+  <div id="zoom-modal" class="modal-overlay" style="display: none;">
+    <div class="zoom-controls">
+      <button class="btn-icon" id="zoom-in" title="Acercar"><i data-lucide="zoom-in"></i></button>
+      <button class="btn-icon" id="zoom-out" title="Alejar"><i data-lucide="zoom-out"></i></button>
+      <button class="btn-icon" id="zoom-fit" title="Ajustar"><i data-lucide="maximize-2"></i></button>
+      <button class="btn-icon" id="zoom-close" title="Cerrar"><i data-lucide="x"></i></button>
+    </div>
+    <button class="zoom-nav zoom-nav-prev" id="zoom-prev"><i data-lucide="chevron-left"></i></button>
+    <button class="zoom-nav zoom-nav-next" id="zoom-next"><i data-lucide="chevron-right"></i></button>
+    <div class="zoom-content">
+      <canvas id="zoom-canvas"></canvas>
+    </div>
+  </div>
+
+  <!-- =================== CATEGORY MANAGER MODAL =================== -->
+  <div id="category-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content category-form">
+      <div class="modal-header">
+        <h3 id="category-modal-title">Gestionar Categorías</h3>
+        <button class="btn-icon" id="category-modal-close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="category-list" id="category-list">
+        <!-- Ítems de categoría renderizados por JS -->
+      </div>
+      <button class="btn" id="btn-add-category">
+        <i data-lucide="plus"></i> Nueva Categoría
+      </button>
+    </div>
+  </div>
+
+  <!-- =================== CATEGORY EDIT MODAL =================== -->
+  <div id="category-edit-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content category-form">
+      <div class="modal-header">
+        <h3 id="category-edit-title">Nueva Categoría</h3>
+        <button class="btn-icon" id="category-edit-close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="form-group">
+        <label>Nombre de la categoría</label>
+        <input type="text" id="cat-name" placeholder="Ej: Resolución">
+      </div>
+      <div class="form-group">
+        <label>Prefijo fijo</label>
+        <input type="text" id="cat-prefix" placeholder="Ej: L16059-RESOL_">
+      </div>
+      <div class="form-group">
+        <label>Campos variables</label>
+        <div id="cat-variables-list">
+          <!-- Filas de variables renderizadas por JS -->
+        </div>
+        <button class="btn-sm btn-ghost" id="btn-add-variable">
+          <i data-lucide="plus"></i> Agregar campo
+        </button>
+      </div>
+      <div class="form-group">
+        <label>Vista previa de plantilla</label>
+        <div class="template-preview" id="template-preview">--</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="btn-cat-cancel">Cancelar</button>
+        <button class="btn" id="btn-cat-save">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contenedor de notificaciones toast -->
+  <div id="toast-container"></div>
+
+  <script type="module" src="assets/js/pdfjsLoader.js"></script>
+  <script src="assets/js/lucide.min.js"></script>
+  <script src="assets/js/sortable.min.js"></script>
+  <script src="views/toastNotification.js"></script>
+  <script src="views/undoManager.js"></script>
+  <script src="views/categoryManager.js"></script>
+  <script src="views/zoomModal.js"></script>
+  <script src="views/homeView.js"></script>
+  <script src="views/sidePanel.js"></script>
+  <script src="views/editorView.js"></script>
+  <script src="views/renderer.js"></script>
+
 </body>
 </html>
