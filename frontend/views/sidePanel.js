@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Panel Lateral: Gestión de Grupos, Plantillas Dinámicas y Opciones de Exportación
  */
 class SidePanel {
@@ -55,7 +55,8 @@ class SidePanel {
     if (!groups || groups.length === 0) {
       if (this.noGroupsMsg) {
         this.groupListContainer.appendChild(this.noGroupsMsg);
-        this.noGroupsMsg.style.display = 'block';
+        this.noGroupsMsg.style.display = 'flex';
+        if (window.lucide) window.lucide.createIcons({ root: this.noGroupsMsg });
       }
       if (this.btnExport) this.btnExport.disabled = true;
       return;

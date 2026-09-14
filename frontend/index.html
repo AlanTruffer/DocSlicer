@@ -40,9 +40,12 @@
 
       <div class="dropzone" id="dropzone">
         <i data-lucide="upload-cloud" class="dropzone-icon"></i>
-        <p class="dropzone-text">Arrastrá tu archivo PDF aquí</p>
-        <p class="dropzone-hint">o</p>
-        <button class="btn" id="btn-browse">Explorar archivo</button>
+        <p class="dropzone-text">Soltar archivo PDF aquí</p>
+        <p class="dropzone-hint">o hacé clic en cualquier parte para explorar en tu equipo</p>
+        <button class="btn btn-browse-action" id="btn-browse">
+          <i data-lucide="file-plus"></i>
+          <span>Elegir archivo PDF</span>
+        </button>
       </div>
 
       <div class="recent-section" id="recent-section" style="display: none;">
@@ -61,7 +64,7 @@
         <button class="btn-icon" id="btn-back" title="Volver al inicio">
           <i data-lucide="arrow-left"></i>
         </button>
-        <span class="editor-filename" id="editor-filename">documento.pdf</span>
+        <span class="editor-filename" id="editor-filename" title="documento.pdf">documento.pdf</span>
       </div>
       <div class="editor-header-right">
         <button class="btn-icon" id="btn-undo" title="Deshacer (Ctrl+Z)">
@@ -73,6 +76,7 @@
         <button class="btn-icon" id="btn-select-all" title="Seleccionar todo (Ctrl+A)">
           <i data-lucide="check-square"></i>
         </button>
+        <span id="selection-counter" class="selection-counter" style="display: none;"></span>
         <button class="btn-icon" id="btn-group" title="Agrupar selección" disabled>
           <i data-lucide="group"></i>
         </button>
@@ -99,7 +103,11 @@
         </div>
 
         <div class="group-list" id="group-list">
-          <p class="text-muted" id="no-groups-msg">No hay grupos creados. Seleccioná páginas y hacé clic en "Agrupar".</p>
+          <div class="empty-state" id="no-groups-msg">
+            <i data-lucide="layers" class="empty-state-icon"></i>
+            <p class="empty-state-title">No hay grupos creados</p>
+            <p class="empty-state-hint">Seleccioná páginas en la línea de tiempo y pulsá <strong>Agrupar</strong> para formar un lote de exportación.</p>
+          </div>
         </div>
 
         <div class="export-section">

@@ -54,6 +54,7 @@ class EditorView {
     this.btnRedo = document.getElementById('btn-redo');
     this.btnSelectAll = document.getElementById('btn-select-all');
     this.btnGroup = document.getElementById('btn-group');
+    this.selectionCounter = document.getElementById('selection-counter');
   }
 
   bindEvents() {
@@ -413,8 +414,21 @@ class EditorView {
       }
     });
 
+    if (this.selectionCounter) {
+      if (this.selectedPages.size > 0) {
+        const count = this.selectedPages.size;
+        this.selectionCounter.textContent = `${count} seleccionada${count > 1 ? 's' : ''}`;
+        this.selectionCounter.style.display = 'inline-flex';
+      } else {
+        this.selectionCounter.style.display = 'none';
+      }
+    }
+
     if (this.btnGroup) {
       this.btnGroup.disabled = this.selectedPages.size === 0;
+      this.btnGroup.title = this.selectedPages.size > 0 
+        ? `Agrupar ${this.selectedPages.size} página(s) seleccionada(s)`
+        : 'Seleccioná 1 o más páginas para agrupar';
     }
   }
 
