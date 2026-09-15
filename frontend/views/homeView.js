@@ -75,15 +75,33 @@ class HomeView {
     if (!this.recentGrid) return;
     this.recentGrid.innerHTML = '';
 
+    const mostRecentWithDraft = items.find(i => i.hasDraft);
+    const resumeBanner = document.getElementById('resume-session-banner');
+    if (resumeBanner) {
+      if (mostRecentWithDraft) {
+        resumeBanner.style.display = 'flex';
+        const nameEl = document.getElementById('resume-filename');
+        if (nameEl) nameEl.textContent = `Continuar edición de "${mostRecentWithDraft.fileName}"`;
+        const btnResume = document.getElementById('btn-resume-session');
+        if (btnResume) {
+          btnResume.onclick = () => this.openRecentFile(mostRecentWithDraft.filePath);
+        }
+      } else {
+        resumeBanner.style.display = 'none';
+      }
+    }
+
     items.forEach(item => {
       const card = document.createElement('div');
       card.className = 'history-card';
+      if (item.hasDraft) card.classList.add('has-draft');
       
       const thumbSrc = item.thumbnailPath ? `file://${item.thumbnailPath.replace(/\\/g, '/')}` : 'assets/icon.png';
 
       card.innerHTML = `
         <div class="history-thumb-container">
           <img src="${thumbSrc}" alt="${item.fileName}" class="history-thumb" onerror="this.src='assets/icon.png'">
+          ${item.hasDraft ? '<span class="history-card-draft-badge"><i data-lucide="edit-3"></i> En edición</span>' : ''}
         </div>
         <div class="history-info">
           <span class="history-title" title="${item.fileName}">${item.fileName}</span>
@@ -93,6 +111,11 @@ class HomeView {
       card.addEventListener('click', () => this.openRecentFile(item.filePath));
       this.recentGrid.appendChild(card);
     });
+
+    if (window.lucide) {
+      window.lucide.createIcons({ root: this.recentGrid });
+      if (resumeBanner) window.lucide.createIcons({ root: resumeBanner });
+    }
   }
 
   async handleBrowseClick() {

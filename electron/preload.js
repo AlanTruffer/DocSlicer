@@ -49,6 +49,14 @@ contextBridge.exposeInMainWorld('api', {
   saveCategories: (categories) => ipcRenderer.invoke('storage:saveCategories', categories),
 
   // =============================================
+  // Almacenamiento: Borradores / Sesión
+  // =============================================
+  saveDraft: (filePath, draftData) => ipcRenderer.invoke('storage:saveDraft', filePath, draftData),
+  getDraft: (filePath) => ipcRenderer.invoke('storage:getDraft', filePath),
+  hasDraft: (filePath) => ipcRenderer.invoke('storage:hasDraft', filePath),
+  clearDraft: (filePath) => ipcRenderer.invoke('storage:clearDraft', filePath),
+
+  // =============================================
   // Miniaturas (thumbnails)
   // =============================================
   saveThumbnail: (filePath, dataUrl) => ipcRenderer.invoke('thumbnail:save', filePath, dataUrl),
@@ -58,6 +66,6 @@ contextBridge.exposeInMainWorld('api', {
   // =============================================
   // Procesamiento de PDF
   // =============================================
-  processPdf: (pdfBuffer, groups, outputDir, useSubfolders) =>
-    ipcRenderer.invoke('pdf:process', pdfBuffer, groups, outputDir, useSubfolders),
+  processPdf: (source, groups, outputDir, useSubfolders, optionalBuffer) =>
+    ipcRenderer.invoke('pdf:process', source, groups, outputDir, useSubfolders, optionalBuffer),
 });

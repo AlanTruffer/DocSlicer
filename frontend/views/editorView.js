@@ -1,12 +1,14 @@
-/**
- * Vista Editor: Línea de Tiempo, Reordenar (SortableJS), Rotaciones, Selección y Agrupamiento
+﻿/**
+ * Vista Editor: Línea de Tiempo, Reordenar (SortableJS), Rotaciones, Selección, Agrupamiento y Autoguardado
  */
 class EditorView {
   constructor() {
     this.pdfBuffer = null;
+    this.pdfBufferCopy = null;
     this.pdfDoc = null;
     this.filePath = '';
     this.fileName = '';
+    this._autoSaveTimer = null;
 
     // Paleta de colores para distinguir grupos
     this.groupColors = ['#3b82f6', '#8b5cf6', '#ec4899', '#f97316', '#14b8a6', '#eab308'];
@@ -22,20 +24,7 @@ class EditorView {
      * }
      */
     this.pages = [];
-    /**
-     * pageOrder: Array de originalIndex según el orden visual actual en la línea de tiempo
-     */
     this.pageOrder = [];
-    /**
-     * groups: Array de objetos de lote:
-     * {
-     *   id: string,
-     *   color: string,
-     *   pageIndices: number[], // en orden visual
-     *   categoryId: string,
-     *   variableValues: Record<string, string>
-     * }
-     */
     this.groups = [];
 
     this.selectedPages = new Set(); // Set de originalIndex
@@ -55,6 +44,7 @@ class EditorView {
     this.btnSelectAll = document.getElementById('btn-select-all');
     this.btnGroup = document.getElementById('btn-group');
     this.selectionCounter = document.getElementById('selection-counter');
+    this.inputLegajoPrefix = document.getElementById('input-legajo-prefix');
   }
 
   bindEvents() {
@@ -84,11 +74,17 @@ class EditorView {
       this.btnGroup.addEventListener('click', () => this.groupSelectedPages());
     }
 
+    if (this.inputLegajoPrefix) {
+      this.inputLegajoPrefix.addEventListener('input', () => {
+        this.updateSidePanel();
+        this.scheduleAutoSave();
+      });
+    }
+
     // Atajos de teclado en el editor
     document.addEventListener('keydown', (e) => {
       if (!this.isActive()) return;
 
-      // Si el foco está en un input o select, no capturar Delete o atajos
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
         return;
       }
@@ -123,6 +119,13 @@ class EditorView {
     return this.viewElement && this.viewElement.classList.contains('active');
   }
 
+  getLegajoPrefix() {
+    if (this.inputLegajoPrefix && this.inputLegajoPrefix.value.trim()) {
+      return this.inputLegajoPrefix.value.trim();
+    }
+    return (this.fileName || '').replace(/\.[^/.]+$/, '');
+  }
+
   async ensurePdfjsReady() {
     if (window.pdfjsLib) return window.pdfjsLib;
     return new Promise((resolve, reject) => {
@@ -144,9 +147,18 @@ class EditorView {
     this.filePath = fileData.filePath;
     this.fileName = fileData.fileName;
     this.pdfBuffer = fileData.buffer;
+    // Copia segura inmutable del buffer
+    this.pdfBufferCopy = fileData.buffer && fileData.buffer.slice ? fileData.buffer.slice(0) : fileData.buffer;
 
     if (this.fileNameLabel) {
       this.fileNameLabel.textContent = this.fileName;
+      this.fileNameLabel.title = this.filePath || this.fileName;
+    }
+
+    // Prefijo predeterminado obtenido del nombre del archivo (ej. L16034.pdf -> L16034)
+    const defaultLegajo = (this.fileName || '').replace(/\.[^/.]+$/, '');
+    if (this.inputLegajoPrefix) {
+      this.inputLegajoPrefix.value = defaultLegajo;
     }
 
     // Asegurar que pdfjsLib esté listo
@@ -175,14 +187,103 @@ class EditorView {
       this.pageOrder.push(i);
     }
 
-    // Renderizar tarjetas iniciales
+    // Comprobar si existe un borrador previo guardado para este archivo
+    let restored = false;
+    if (this.filePath && window.api && window.api.getDraft) {
+      try {
+        const draft = await window.api.getDraft(this.filePath);
+        if (draft) {
+          this.applyDraft(draft, numPages);
+          restored = true;
+        }
+      } catch (e) {
+        console.warn('No se pudo recuperar borrador previo:', e);
+      }
+    }
+
+    // Renderizar tarjetas en línea de tiempo
     this.renderTimeline();
 
     // Guardar en historial y generar thumbnail de la primera página
     await this.processFirstPageThumbnail();
 
-    // Asignar primer grupo por defecto si se desea o dejar libre
     this.updateSidePanel();
+
+    if (restored && window.toast) {
+      window.toast.success('Se recuperó tu sesión guardada pendiente');
+    }
+  }
+
+  applyDraft(draft, numPages) {
+    if (draft.legajoPrefix && this.inputLegajoPrefix) {
+      this.inputLegajoPrefix.value = draft.legajoPrefix;
+    }
+
+    if (Array.isArray(draft.rotations)) {
+      draft.rotations.forEach(r => {
+        if (this.pages[r.originalIndex]) {
+          this.pages[r.originalIndex].rotation = r.rotation;
+        }
+      });
+    }
+
+    if (Array.isArray(draft.exclusions)) {
+      draft.exclusions.forEach(idx => {
+        if (this.pages[idx]) {
+          this.pages[idx].excluded = true;
+        }
+      });
+    }
+
+    if (Array.isArray(draft.pageOrder) && draft.pageOrder.length === numPages) {
+      this.pageOrder = [...draft.pageOrder];
+    }
+
+    if (Array.isArray(draft.groups)) {
+      this.groups = draft.groups.map(g => ({
+        id: g.id,
+        color: g.color,
+        pageIndices: [...g.pageIndices],
+        categoryId: g.categoryId,
+        variableValues: { ...(g.variableValues || {}) }
+      }));
+
+      this.groups.forEach(g => {
+        g.pageIndices.forEach(idx => {
+          if (this.pages[idx]) {
+            this.pages[idx].groupId = g.id;
+          }
+        });
+      });
+    }
+  }
+
+  scheduleAutoSave() {
+    if (this._autoSaveTimer) clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = setTimeout(() => {
+      this.saveCurrentDraft();
+    }, 400);
+  }
+
+  async saveCurrentDraft() {
+    if (!this.filePath || !window.api || !window.api.saveDraft) return;
+    const draftData = {
+      filePath: this.filePath,
+      fileName: this.fileName,
+      legajoPrefix: this.getLegajoPrefix(),
+      pageOrder: [...this.pageOrder],
+      rotations: this.pages.map(p => ({ originalIndex: p.originalIndex, rotation: p.rotation })),
+      exclusions: this.pages.filter(p => p.excluded).map(p => p.originalIndex),
+      groups: this.groups.map(g => ({
+        id: g.id,
+        color: g.color,
+        pageIndices: [...g.pageIndices],
+        categoryId: g.categoryId,
+        variableValues: { ...(g.variableValues || {}) }
+      })),
+      savedAt: new Date().toISOString()
+    };
+    await window.api.saveDraft(this.filePath, draftData);
   }
 
   async processFirstPageThumbnail() {
@@ -218,9 +319,11 @@ class EditorView {
     if (!this.timelineContainer) return;
     this.timelineContainer.innerHTML = '';
 
+    const categories = window.categoryManager ? window.categoryManager.categories : [];
+
     this.pageOrder.forEach((pageIdx) => {
       const pageData = this.pages[pageIdx];
-      const card = this.createPageCard(pageData);
+      const card = this.createPageCard(pageData, categories);
       this.timelineContainer.appendChild(card);
       this.renderCardThumbnail(pageData, card);
     });
@@ -230,7 +333,7 @@ class EditorView {
     if (window.lucide) window.lucide.createIcons({ root: this.timelineContainer });
   }
 
-  createPageCard(pageData) {
+  createPageCard(pageData, categories) {
     const card = document.createElement('div');
     card.className = 'page-card';
     card.setAttribute('data-page-index', pageData.originalIndex);
@@ -244,6 +347,30 @@ class EditorView {
       card.style.borderColor = group.color;
       card.style.borderWidth = '2px';
       card.style.borderStyle = 'solid';
+    }
+
+    // Soporte inferior / banner del grupo en la línea de tiempo
+    let groupFooterHtml = '';
+    if (group) {
+      const currentCat = categories.find(c => c.id === group.categoryId) || categories[0];
+      const catName = currentCat ? currentCat.name : 'Categoría';
+
+      let catOptions = '';
+      categories.forEach(c => {
+        const selected = c.id === group.categoryId ? 'selected' : '';
+        catOptions += `<option value="${c.id}" ${selected}>${c.name}</option>`;
+      });
+
+      groupFooterHtml = `
+        <div class="timeline-group-footer" style="border-top: 2px solid ${group.color}; background: ${group.color}15;">
+          <div class="timeline-group-label-wrapper">
+            <span class="timeline-group-cat-title" style="color: ${group.color}" title="Categoría de este lote">${catName}</span>
+            <select class="timeline-group-cat-select" data-group-id="${group.id}" title="Cambiar categoría con un clic">
+              ${catOptions}
+            </select>
+          </div>
+        </div>
+      `;
     }
 
     card.innerHTML = `
@@ -262,17 +389,18 @@ class EditorView {
           <i data-lucide="${pageData.excluded ? 'check' : 'trash-2'}"></i>
         </button>
       </div>
+      ${groupFooterHtml}
     `;
 
     // Click para seleccionar
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.page-controls')) return;
+      if (e.target.closest('.page-controls') || e.target.closest('.timeline-group-footer')) return;
       this.handleCardClick(pageData.originalIndex, e);
     });
 
     // Doble click para Zoom
     card.addEventListener('dblclick', (e) => {
-      if (e.target.closest('.page-controls')) return;
+      if (e.target.closest('.page-controls') || e.target.closest('.timeline-group-footer')) return;
       if (window.zoomModal) {
         window.zoomModal.open(
           this.pdfDoc,
@@ -300,6 +428,18 @@ class EditorView {
       e.stopPropagation();
       this.toggleExcludePage(pageData.originalIndex);
     });
+
+    // Cambio rápido de categoría desde la barra inferior de la línea de tiempo
+    const catSelect = card.querySelector('.timeline-group-cat-select');
+    if (catSelect && group) {
+      catSelect.addEventListener('change', (e) => {
+        e.stopPropagation();
+        this.updateGroupCategory(group.id, e.target.value);
+      });
+      catSelect.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+    }
 
     return card;
   }
@@ -333,7 +473,7 @@ class EditorView {
       animation: 200,
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
-      filter: '.btn-icon',
+      filter: '.btn-icon, .timeline-group-cat-select',
       preventOnFilter: false,
       onEnd: (evt) => {
         const oldIndex = evt.oldIndex;
@@ -354,22 +494,24 @@ class EditorView {
               this.pageOrder = [...previousOrder];
               this.renderTimeline();
               this.syncGroupsPageOrder();
+              this.scheduleAutoSave();
             },
             redo: () => {
               this.pageOrder = [...newOrder];
               this.renderTimeline();
               this.syncGroupsPageOrder();
+              this.scheduleAutoSave();
             }
           });
         }
 
         this.syncGroupsPageOrder();
+        this.scheduleAutoSave();
       }
     });
   }
 
   syncGroupsPageOrder() {
-    // Reordenar las páginas de cada grupo según el orden actual de la línea de tiempo
     this.groups.forEach(g => {
       g.pageIndices.sort((a, b) => this.pageOrder.indexOf(a) - this.pageOrder.indexOf(b));
     });
@@ -384,7 +526,6 @@ class EditorView {
         this.selectedPages.add(pageIdx);
       }
     } else if (event.shiftKey && this.selectedPages.size > 0) {
-      // Rango de selección continua
       const lastSelected = Array.from(this.selectedPages).pop();
       const idxA = this.pageOrder.indexOf(lastSelected);
       const idxB = this.pageOrder.indexOf(pageIdx);
@@ -455,6 +596,7 @@ class EditorView {
 
     page.rotation = newRotation;
     this.refreshPageCardThumbnail(pageIdx);
+    this.scheduleAutoSave();
 
     if (window.undoManager) {
       window.undoManager.pushAction({
@@ -463,10 +605,12 @@ class EditorView {
         undo: () => {
           page.rotation = prevRotation;
           this.refreshPageCardThumbnail(pageIdx);
+          this.scheduleAutoSave();
         },
         redo: () => {
           page.rotation = newRotation;
           this.refreshPageCardThumbnail(pageIdx);
+          this.scheduleAutoSave();
         }
       });
     }
@@ -479,7 +623,6 @@ class EditorView {
 
     if (page.excluded) {
       this.selectedPages.delete(pageIdx);
-      // Si estaba en un grupo, quitarla del grupo
       if (page.groupId) {
         this.removePageFromGroup(pageIdx, page.groupId);
       }
@@ -487,6 +630,7 @@ class EditorView {
 
     this.renderTimeline();
     this.updateSidePanel();
+    this.scheduleAutoSave();
 
     if (window.undoManager) {
       window.undoManager.pushAction({
@@ -496,11 +640,13 @@ class EditorView {
           page.excluded = wasExcluded;
           this.renderTimeline();
           this.updateSidePanel();
+          this.scheduleAutoSave();
         },
         redo: () => {
           page.excluded = !wasExcluded;
           this.renderTimeline();
           this.updateSidePanel();
+          this.scheduleAutoSave();
         }
       });
     }
@@ -518,6 +664,7 @@ class EditorView {
     this.selectedPages.clear();
     this.renderTimeline();
     this.updateSidePanel();
+    this.scheduleAutoSave();
     if (window.toast) window.toast.show(`${pagesToExclude.length} página(s) excluida(s)`, 'warning', 2500);
   }
 
@@ -535,12 +682,9 @@ class EditorView {
   groupSelectedPages() {
     if (this.selectedPages.size === 0) return;
 
-    // Obtener páginas seleccionadas en el orden en que aparecen en la línea de tiempo
     const selectedSorted = this.pageOrder.filter(idx => this.selectedPages.has(idx) && !this.pages[idx].excluded);
-
     if (selectedSorted.length === 0) return;
 
-    // Desasignar de grupos previos si pertenecían a alguno
     selectedSorted.forEach(idx => {
       if (this.pages[idx].groupId) {
         this.removePageFromGroup(idx, this.pages[idx].groupId);
@@ -550,7 +694,6 @@ class EditorView {
     const groupId = 'group_' + Date.now();
     const color = this.groupColors[this.groups.length % this.groupColors.length];
     
-    // Categoría por defecto
     const categories = window.categoryManager ? window.categoryManager.categories : [];
     const defaultCat = categories.length > 0 ? categories[0].id : 'resolucion';
 
@@ -571,6 +714,7 @@ class EditorView {
 
     this.renderTimeline();
     this.updateSidePanel();
+    this.scheduleAutoSave();
 
     if (window.toast) window.toast.success(`Grupo creado con ${selectedSorted.length} página(s)`);
 
@@ -580,6 +724,7 @@ class EditorView {
         description: `Crear lote de ${selectedSorted.length} páginas`,
         undo: () => {
           this.ungroup(groupId, false);
+          this.scheduleAutoSave();
         },
         redo: () => {
           newGroup.pageIndices.forEach(idx => {
@@ -588,6 +733,7 @@ class EditorView {
           this.groups.push(newGroup);
           this.renderTimeline();
           this.updateSidePanel();
+          this.scheduleAutoSave();
         }
       });
     }
@@ -600,7 +746,6 @@ class EditorView {
     group.pageIndices = group.pageIndices.filter(p => p !== pageIdx);
     this.pages[pageIdx].groupId = null;
 
-    // Si el grupo queda vacío, eliminarlo
     if (group.pageIndices.length === 0) {
       this.groups = this.groups.filter(g => g.id !== groupId);
     }
@@ -620,6 +765,7 @@ class EditorView {
 
     this.renderTimeline();
     this.updateSidePanel();
+    this.scheduleAutoSave();
 
     if (registerUndo && window.undoManager) {
       window.undoManager.pushAction({
@@ -632,9 +778,11 @@ class EditorView {
           this.groups.push(savedGroup);
           this.renderTimeline();
           this.updateSidePanel();
+          this.scheduleAutoSave();
         },
         redo: () => {
           this.ungroup(savedGroup.id, false);
+          this.scheduleAutoSave();
         }
       });
     }
@@ -644,7 +792,9 @@ class EditorView {
     const group = this.groups.find(g => g.id === groupId);
     if (!group) return;
     group.categoryId = newCatId;
+    this.renderTimeline();
     this.updateSidePanel();
+    this.scheduleAutoSave();
   }
 
   updateGroupVariable(groupId, varName, val) {
@@ -653,11 +803,11 @@ class EditorView {
     if (!group.variableValues) group.variableValues = {};
     group.variableValues[varName] = val;
 
-    // Actualizar previsualización de nombre de salida en el sidePanel
     if (window.sidePanel) {
       const categories = window.categoryManager ? window.categoryManager.categories : [];
       window.sidePanel.renderGroups(this.groups, categories);
     }
+    this.scheduleAutoSave();
   }
 
   updateSidePanel() {
@@ -668,7 +818,7 @@ class EditorView {
   }
 
   getExportPlan() {
-    if (!this.pdfBuffer) return null;
+    if (!this.filePath && !this.pdfBufferCopy) return null;
 
     const categories = window.categoryManager ? window.categoryManager.categories : [];
     const exportGroups = [];
@@ -679,7 +829,6 @@ class EditorView {
       const category = categories.find(c => c.id === g.categoryId) || categories[0];
       const fileName = window.sidePanel ? window.sidePanel.calculateFileName(g, category) : 'documento.pdf';
 
-      // Rotaciones específicas para las páginas del grupo
       const rotations = {};
       g.pageIndices.forEach(idx => {
         if (this.pages[idx].rotation !== 0) {
@@ -696,7 +845,8 @@ class EditorView {
     });
 
     return {
-      pdfBuffer: this.pdfBuffer,
+      filePath: this.filePath,
+      pdfBufferCopy: this.pdfBufferCopy,
       groups: exportGroups
     };
   }

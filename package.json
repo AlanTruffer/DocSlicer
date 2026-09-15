@@ -5,14 +5,52 @@
   "main": "electron/main.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win",
+    "build:win": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.docslicer.app",
+    "productName": "DocSlicer",
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DocSlicer"
+    },
+    "files": [
+      "electron/**/*",
+      "backend/**/*",
+      "frontend/**/*",
+      "build/**/*",
+      "package.json"
+    ]
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "commonjs",
   "devDependencies": {
-    "electron": "^44.3.0"
+    "electron": "^44.3.0",
+    "electron-builder": "^26.15.3"
   },
   "dependencies": {
     "pdf-lib": "^1.17.1",

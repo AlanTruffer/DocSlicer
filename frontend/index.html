@@ -48,6 +48,20 @@
         </button>
       </div>
 
+      <div class="resume-session-banner" id="resume-session-banner" style="display: none;">
+        <div class="resume-session-info">
+          <i data-lucide="clock" class="resume-icon"></i>
+          <div>
+            <div class="resume-title" id="resume-filename">Continuar edición de archivo</div>
+            <div class="resume-subtitle" id="resume-time">Se guardó tu progreso pendiente</div>
+          </div>
+        </div>
+        <button class="btn btn-sm btn-resume" id="btn-resume-session">
+          <i data-lucide="play"></i>
+          <span>Continuar sesión</span>
+        </button>
+      </div>
+
       <div class="recent-section" id="recent-section" style="display: none;">
         <h3 class="section-title">Recientes</h3>
         <div class="recent-grid" id="recent-grid">
@@ -64,7 +78,13 @@
         <button class="btn-icon" id="btn-back" title="Volver al inicio">
           <i data-lucide="arrow-left"></i>
         </button>
-        <span class="editor-filename" id="editor-filename" title="documento.pdf">documento.pdf</span>
+        <div class="legajo-prefix-wrapper" title="Prefijo predeterminado para nombrar los archivos de salida">
+          <label for="input-legajo-prefix" class="legajo-prefix-label">Legajo / Prefijo:</label>
+          <div class="legajo-input-container">
+            <input type="text" id="input-legajo-prefix" class="input-legajo-prefix" placeholder="Ej: L16034">
+          </div>
+        </div>
+        <span class="editor-filename-badge" id="editor-filename" title="Archivo original cargado">documento.pdf</span>
       </div>
       <div class="editor-header-right">
         <button class="btn-icon" id="btn-undo" title="Deshacer (Ctrl+Z)">

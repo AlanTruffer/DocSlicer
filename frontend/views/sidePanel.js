@@ -159,22 +159,40 @@ class SidePanel {
   calculateFileName(group, category) {
     if (!category) return 'documento.pdf';
 
-    const prefix = category.prefix || '';
-    let name = prefix;
+    // Obtener prefijo de legajo definido por el usuario o extraído del nombre de archivo
+    const legajoPrefix = (window.editorView && typeof window.editorView.getLegajoPrefix === 'function')
+      ? window.editorView.getLegajoPrefix().trim()
+      : '';
+
+    const catPrefix = (category.prefix !== undefined && category.prefix !== '') 
+      ? category.prefix.replace(/[-_]+$/, '') 
+      : category.name.toUpperCase();
+
+    let categoryPart = catPrefix;
 
     if (category.variables && category.variables.length > 0) {
       const parts = category.variables.map(v => {
         const val = (group.variableValues && group.variableValues[v.name]) 
-          ? group.variableValues[v.name] 
-          : (v.placeholder || v.name);
+          ? group.variableValues[v.name].trim() 
+          : (v.placeholder || v.name).trim();
         return val;
       });
-      name = prefix ? `${prefix}${parts.join('_')}.pdf` : `${parts.join('_')}.pdf`;
-    } else {
-      name = prefix ? `${prefix}.pdf` : 'documento.pdf';
+      categoryPart = catPrefix ? `${catPrefix}-${parts.join('-')}` : `${parts.join('-')}`;
     }
 
-    return name.replace(/[\/\\?%*:|"<>]/g, '_'); // Sanitizar nombre de archivo
+    // Formato final: [LEGAJO]-[CATEGORIA-VARIABLES].pdf (ej: L16034-DOM.pdf o L16034-RESOL-2025-309.pdf)
+    let finalName = '';
+    if (legajoPrefix && categoryPart) {
+      finalName = `${legajoPrefix.replace(/-+$/, '')}-${categoryPart.replace(/^-+/, '')}.pdf`;
+    } else if (legajoPrefix) {
+      finalName = `${legajoPrefix}.pdf`;
+    } else if (categoryPart) {
+      finalName = `${categoryPart}.pdf`;
+    } else {
+      finalName = 'documento.pdf';
+    }
+
+    return finalName.replace(/[\/\\?%*:|"<>]/g, '_');
   }
 
   getExportMode() {
@@ -208,16 +226,22 @@ class SidePanel {
       this.btnExport.innerHTML = `<i data-lucide="loader-2" class="spin"></i> Exportando...`;
       if (window.lucide) window.lucide.createIcons({ root: this.btnExport });
 
+      // Pasar plan.filePath como fuente principal para lectura directa desde disco en el backend
       const result = await window.api.processPdf(
-        plan.pdfBuffer,
+        plan.filePath,
         plan.groups,
         outputDir,
-        useSubfolders
+        useSubfolders,
+        plan.pdfBufferCopy
       );
 
       if (result && result.success) {
         if (window.toast) {
           window.toast.success(`¡Se exportaron ${result.filesCreated.length} archivos con éxito!`);
+        }
+        // Limpiar el borrador guardado ya que fue exportado con éxito
+        if (plan.filePath && window.api && window.api.clearDraft) {
+          await window.api.clearDraft(plan.filePath);
         }
       } else {
         const errorMsg = result && result.errors ? result.errors.join(', ') : 'Ocurrió un error en la exportación';

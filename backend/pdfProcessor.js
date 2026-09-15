@@ -21,10 +21,24 @@ class PdfProcessor {
    * @param {boolean} useSubfolders - Si es true, crea una subcarpeta por categoría
    * @returns {Promise<{success: boolean, filesCreated: string[], errors: string[]}>}
    */
-  async splitPdf(pdfBuffer, groups, outputDir, useSubfolders) {
+  async splitPdf(source, groups, outputDir, useSubfolders) {
     const results = { success: true, filesCreated: [], errors: [] };
 
     try {
+      let pdfBuffer;
+      if (typeof source === 'string') {
+        if (!fs.existsSync(source)) {
+          throw new Error(`El archivo de origen no existe en la ruta: ${source}`);
+        }
+        pdfBuffer = fs.readFileSync(source);
+      } else if (Buffer.isBuffer(source)) {
+        pdfBuffer = source;
+      } else if (source && source.byteLength > 0) {
+        pdfBuffer = Buffer.from(source);
+      } else {
+        throw new Error('No se recibió un archivo o buffer válido para procesar.');
+      }
+
       const sourcePdf = await PDFDocument.load(pdfBuffer);
 
       for (const group of groups) {

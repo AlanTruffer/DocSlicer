@@ -120,16 +120,16 @@ img {
 }
 
 .titlebar-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
 }
 
 .titlebar-title {
   font-size: var(--font-body);
   font-weight: 600;
   letter-spacing: 0.2px;
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 .titlebar-controls {
@@ -1222,3 +1222,197 @@ select option {
 .empty-state-hint strong {
   color: var(--accent);
 }
+
+/* ============================================================
+   9. SESIÓN PENDIENTE & PREFIJO DE LEGAJO
+   ============================================================ */
+
+/* Banner de reanudación en Home */
+.resume-session-banner {
+  width: 100%;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.2) 0%, rgba(30, 41, 59, 0.95) 100%);
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  border-radius: 10px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  animation: fadeIn 0.3s ease;
+}
+
+.resume-session-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.resume-icon {
+  color: #60a5fa;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+}
+
+.resume-title {
+  font-size: var(--font-body);
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.resume-subtitle {
+  font-size: var(--font-micro);
+  color: var(--text-secondary);
+}
+
+.btn-resume {
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.btn-resume:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+}
+
+/* Badge de borrador en tarjetas del historial */
+.history-card {
+  position: relative;
+}
+
+.history-thumb-container {
+  position: relative;
+}
+
+.history-card-draft-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(245, 158, 11, 0.95);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
+.history-card-draft-badge svg {
+  width: 11px;
+  height: 11px;
+}
+
+.history-card.has-draft {
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+/* Prefijo de legajo editable en barra superior del editor */
+.legajo-prefix-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  padding: 3px 10px;
+  border-radius: 6px;
+  transition: border-color 0.15s;
+}
+
+.legajo-prefix-wrapper:focus-within {
+  border-color: var(--border-focus);
+}
+
+.legajo-prefix-label {
+  font-size: var(--font-micro);
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.legajo-input-container {
+  display: flex;
+  align-items: center;
+}
+
+.input-legajo-prefix {
+  background: transparent !important;
+  border: none !important;
+  color: #60a5fa !important;
+  font-weight: 700 !important;
+  font-size: var(--font-body) !important;
+  padding: 0 !important;
+  width: 120px !important;
+  box-shadow: none !important;
+  text-transform: uppercase;
+}
+
+.input-legajo-prefix:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.editor-filename-badge {
+  font-size: var(--font-micro);
+  color: var(--text-muted);
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+
+/* Soporte inferior / Banner de lote en la línea de tiempo */
+.timeline-group-footer {
+  padding: 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 6;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  cursor: pointer;
+}
+
+.timeline-group-label-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  position: relative;
+}
+
+.timeline-group-cat-title {
+  font-size: var(--font-micro);
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  letter-spacing: 0.3px;
+}
+
+.timeline-group-cat-select {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+

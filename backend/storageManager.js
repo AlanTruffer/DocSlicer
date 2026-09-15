@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 /**
  * StorageManager - Gestiona la persistencia de datos en formato JSON
@@ -15,19 +16,23 @@ class StorageManager {
     this.historyFile = path.join(this.basePath, 'history.json');
     this.categoriesFile = path.join(this.basePath, 'categories.json');
     this.thumbnailsDir = path.join(this.basePath, 'thumbnails');
+    this.draftsDir = path.join(this.basePath, 'drafts');
     this._ensureDirs();
   }
 
   /**
-   * Crea el directorio de thumbnails si no existe
+   * Crea los directorios necesarios si no existen
    */
   _ensureDirs() {
     try {
       if (!fs.existsSync(this.thumbnailsDir)) {
         fs.mkdirSync(this.thumbnailsDir, { recursive: true });
       }
+      if (!fs.existsSync(this.draftsDir)) {
+        fs.mkdirSync(this.draftsDir, { recursive: true });
+      }
     } catch (err) {
-      console.error('Error al crear directorio de thumbnails:', err.message);
+      console.error('Error al crear directorios de almacenamiento:', err.message);
     }
   }
 
@@ -37,7 +42,7 @@ class StorageManager {
 
   /**
    * Obtiene el historial de archivos abiertos recientemente.
-   * @returns {Array} Array de entradas del historial (máximo 3)
+   * @returns {Array} Array de entradas del historial (máximo 5)
    */
   getHistory() {
     try {
@@ -46,8 +51,12 @@ class StorageManager {
       }
       const data = fs.readFileSync(this.historyFile, 'utf-8');
       const parsed = JSON.parse(data);
-      // Asegurar que nunca devolvemos más de 3 entradas
-      return Array.isArray(parsed) ? parsed.slice(0, 3) : [];
+      const list = Array.isArray(parsed) ? parsed.slice(0, 5) : [];
+      // Añadir flag hasDraft a cada entrada
+      return list.map((item) => ({
+        ...item,
+        hasDraft: this.hasDraft(item.filePath),
+      }));
     } catch (err) {
       console.error('Error al leer historial:', err.message);
       return [];
@@ -55,14 +64,16 @@ class StorageManager {
   }
 
   /**
-   * Guarda el historial en disco, limitando a máximo 3 entradas.
+   * Guarda el historial en disco, limitando a máximo 5 entradas.
    * @param {Array} entries - Array de entradas del historial
    */
   saveHistory(entries) {
     try {
-      // Limitar a máximo 3 entradas
-      const limited = Array.isArray(entries) ? entries.slice(0, 3) : [];
-      fs.writeFileSync(this.historyFile, JSON.stringify(limited, null, 2), 'utf-8');
+      // Limitar a máximo 5 entradas
+      const limited = Array.isArray(entries) ? entries.slice(0, 5) : [];
+      // Limpiar propiedades dinámicas antes de guardar
+      const cleanEntries = limited.map(({ hasDraft, ...rest }) => rest);
+      fs.writeFileSync(this.historyFile, JSON.stringify(cleanEntries, null, 2), 'utf-8');
     } catch (err) {
       console.error('Error al guardar historial:', err.message);
     }
@@ -71,12 +82,7 @@ class StorageManager {
   /**
    * Agrega una entrada al historial.
    * La nueva entrada se coloca al inicio, se eliminan duplicados por filePath,
-   * y se mantiene un máximo de 3 entradas.
-   * @param {Object} entry - Entrada del historial
-   * @param {string} entry.filePath - Ruta completa del archivo
-   * @param {string} entry.fileName - Nombre del archivo
-   * @param {string} entry.thumbnailPath - Ruta de la miniatura
-   * @param {string} entry.openedAt - Fecha/hora de apertura (ISO string)
+   * y se mantiene un máximo de 5 entradas.
    */
   addToHistory(entry) {
     try {
@@ -88,12 +94,80 @@ class StorageManager {
       // Agregar la nueva entrada al inicio
       filtered.unshift(entry);
 
-      // Mantener máximo 3 entradas
-      const trimmed = filtered.slice(0, 3);
+      // Mantener máximo 5 entradas
+      const trimmed = filtered.slice(0, 5);
 
       this.saveHistory(trimmed);
     } catch (err) {
       console.error('Error al agregar entrada al historial:', err.message);
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // Borradores y Autoguardado de Sesión
+  // ─────────────────────────────────────────────
+
+  _getDraftPath(filePath) {
+    const hash = crypto.createHash('md5').update(filePath).digest('hex');
+    return path.join(this.draftsDir, `${hash}.json`);
+  }
+
+  /**
+   * Guarda el estado actual de edición de un archivo.
+   */
+  saveDraft(filePath, draftData) {
+    try {
+      if (!filePath) return;
+      const draftPath = this._getDraftPath(filePath);
+      fs.writeFileSync(draftPath, JSON.stringify(draftData, null, 2), 'utf-8');
+    } catch (err) {
+      console.error('Error al guardar borrador:', err.message);
+    }
+  }
+
+  /**
+   * Obtiene el borrador guardado para un archivo.
+   */
+  getDraft(filePath) {
+    try {
+      if (!filePath) return null;
+      const draftPath = this._getDraftPath(filePath);
+      if (fs.existsSync(draftPath)) {
+        const data = fs.readFileSync(draftPath, 'utf-8');
+        return JSON.parse(data);
+      }
+      return null;
+    } catch (err) {
+      console.error('Error al leer borrador:', err.message);
+      return null;
+    }
+  }
+
+  /**
+   * Verifica si existe un borrador guardado para el archivo.
+   */
+  hasDraft(filePath) {
+    try {
+      if (!filePath) return false;
+      const draftPath = this._getDraftPath(filePath);
+      return fs.existsSync(draftPath);
+    } catch (err) {
+      return false;
+    }
+  }
+
+  /**
+   * Elimina el borrador de un archivo (por ejemplo, al terminar la exportación).
+   */
+  clearDraft(filePath) {
+    try {
+      if (!filePath) return;
+      const draftPath = this._getDraftPath(filePath);
+      if (fs.existsSync(draftPath)) {
+        fs.unlinkSync(draftPath);
+      }
+    } catch (err) {
+      console.error('Error al eliminar borrador:', err.message);
     }
   }
 

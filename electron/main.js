@@ -20,6 +20,10 @@ let thumbnailGen;
  * Ventana sin marco (frameless) para usar una titlebar personalizada.
  */
 function createWindow() {
+  const iconIco = path.join(__dirname, '..', 'build', 'icon.ico');
+  const iconPng = path.join(__dirname, '..', 'frontend', 'assets', 'icon.png');
+  const appIcon = fs.existsSync(iconIco) ? iconIco : iconPng;
+
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
@@ -27,7 +31,7 @@ function createWindow() {
     minHeight: 650,
     frame: false,
     titleBarStyle: 'hidden',
-    icon: path.join(__dirname, '..', 'frontend', 'assets', 'icon.png'),
+    icon: appIcon,
     backgroundColor: '#0f172a',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -41,6 +45,11 @@ function createWindow() {
 
 // --- Inicialización de la aplicación ---
 app.whenReady().then(() => {
+  // Configurar ID de modelo de usuario para que Windows vincule correctamente el ícono en la barra de tareas
+  if (process.platform === 'win32') {
+    app.setAppUserModelId('com.docslicer.app');
+  }
+
   const userDataPath = app.getPath('userData');
 
   // Inicializar servicios del backend
@@ -172,6 +181,25 @@ function registerIpcHandlers() {
   });
 
   // =============================================
+  // Almacenamiento: Borradores / Sesión
+  // =============================================
+  ipcMain.handle('storage:saveDraft', (event, filePath, draftData) => {
+    storage.saveDraft(filePath, draftData);
+  });
+
+  ipcMain.handle('storage:getDraft', (event, filePath) => {
+    return storage.getDraft(filePath);
+  });
+
+  ipcMain.handle('storage:hasDraft', (event, filePath) => {
+    return storage.hasDraft(filePath);
+  });
+
+  ipcMain.handle('storage:clearDraft', (event, filePath) => {
+    storage.clearDraft(filePath);
+  });
+
+  // =============================================
   // Miniaturas (thumbnails)
   // =============================================
   ipcMain.handle('thumbnail:save', (event, filePath, dataUrl) => {
@@ -189,7 +217,16 @@ function registerIpcHandlers() {
   // =============================================
   // Procesamiento de PDF
   // =============================================
-  ipcMain.handle('pdf:process', async (event, pdfBuffer, groups, outputDir, useSubfolders) => {
-    return pdfProcessor.splitPdf(Buffer.from(pdfBuffer), groups, outputDir, useSubfolders);
+  ipcMain.handle('pdf:process', async (event, source, groups, outputDir, useSubfolders, optionalBuffer) => {
+    // Si source es una ruta válida en disco, usarla directamente para evitar transferir megabytes por IPC y evitar el bug de detached ArrayBuffer
+    let targetSource = source;
+    if (typeof source === 'string' && fs.existsSync(source)) {
+      targetSource = source;
+    } else if (optionalBuffer && optionalBuffer.byteLength > 0) {
+      targetSource = Buffer.from(optionalBuffer);
+    } else if (source && typeof source !== 'string') {
+      targetSource = Buffer.from(source);
+    }
+    return pdfProcessor.splitPdf(targetSource, groups, outputDir, useSubfolders);
   });
 }
