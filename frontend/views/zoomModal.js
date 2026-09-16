@@ -11,16 +11,20 @@ class ZoomModal {
 
     // Escala visual (1 = ajustado a la ventana) y desplazamiento del canvas
     this.scale = 1;
+    this.fitScale = 1;
     this.panX = 0;
     this.panY = 0;
     this.baseW = 0;
     this.baseH = 0;
     this.minScale = 0.5;
     this.maxScale = 4.0;
+    this.maxRender = 4096; // tope de píxeles por lado para el raster
 
     // Estado de interacción
     this.rendering = false;
     this.pendingRender = false;
+    this._renderTimer = null;
+    this._renderToken = 0; // invalida renders obsoletos en vuelo
     this.dragging = false;
     this.dragStartX = 0;
     this.dragStartY = 0;
@@ -133,7 +137,7 @@ class ZoomModal {
     });
 
     window.addEventListener('resize', () => {
-      if (this.isVisible()) this.applyTransform();
+      if (this.isVisible()) this.renderPage();
     });
   }
 
@@ -142,6 +146,15 @@ class ZoomModal {
   }
 
   async open(pdfDoc, pageNum, rotation = 0, totalPages = 1) {
+    // Anular renders/estado viejos antes de reabrir, para que el render de apertura corra fresco
+    if (this._renderTimer) {
+      clearTimeout(this._renderTimer);
+      this._renderTimer = null;
+    }
+    this.rendering = false;
+    this.pendingRender = false;
+    this._renderToken++;
+
     this.pdfDoc = pdfDoc;
     this.currentPageNum = pageNum;
     this.totalPages = totalPages;
@@ -154,6 +167,14 @@ class ZoomModal {
   }
 
   hide() {
+    // Anula el debounce y los renders en vuelo para que no pinten sobre el próximo open
+    if (this._renderTimer) {
+      clearTimeout(this._renderTimer);
+      this._renderTimer = null;
+    }
+    this.rendering = false;
+    this.pendingRender = false;
+    this._renderToken++;
     if (this.modal) this.modal.style.display = 'none';
   }
 
@@ -176,6 +197,8 @@ class ZoomModal {
 
   centerContent() {
     const { w, h } = this.getStageSize();
+    if (!(w > 0) || !(h > 0)) return;
+    if (!(this.baseW > 0) || !(this.baseH > 0)) return;
     this.panX = (w - this.baseW * this.scale) / 2;
     this.panY = (h - this.baseH * this.scale) / 2;
     this.applyTransform();
@@ -206,7 +229,9 @@ class ZoomModal {
     this.clampPan();
     if (this.canvas) {
       this.canvas.style.transformOrigin = '0 0';
-      this.canvas.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
+      this.canvas.style.transform = `translate(${this.panX}px, ${this.panY}px)`;
+      this.canvas.style.width = `${this.baseW * this.scale}px`;
+      this.canvas.style.height = `${this.baseH * this.scale}px`;
       this.canvas.style.cursor = this.scale > 1.05 ? 'grab' : 'default';
     }
     const levelEl = document.getElementById('zoom-level');
@@ -226,6 +251,7 @@ class ZoomModal {
     this.panX = px - wx * this.scale;
     this.panY = py - wy * this.scale;
     this.applyTransform();
+    this.requestRender();
   }
 
   zoomAtCenter(delta) {
@@ -236,6 +262,7 @@ class ZoomModal {
   async fitToWindow() {
     if (!this.pdfDoc) return;
     try {
+      this.scale = 1;
       await this.renderPage();
       this.resetView();
     } catch (err) {
@@ -249,6 +276,7 @@ class ZoomModal {
       if (window.editorView) {
         this.currentRotation = window.editorView.getPageRotation(this.currentPageNum - 1);
       }
+      this.scale = 1;
       await this.renderPage();
       this.resetView();
     }
@@ -260,9 +288,19 @@ class ZoomModal {
       if (window.editorView) {
         this.currentRotation = window.editorView.getPageRotation(this.currentPageNum - 1);
       }
+      this.scale = 1;
       await this.renderPage();
       this.resetView();
     }
+  }
+
+  // Re-renderiza a la escala visual actual con pequeño retraso (para zoom continuo)
+  requestRender() {
+    if (this._renderTimer) clearTimeout(this._renderTimer);
+    this._renderTimer = setTimeout(() => {
+      this._renderTimer = null;
+      this.renderPage();
+    }, 220);
   }
 
   async renderPage() {
@@ -272,24 +310,29 @@ class ZoomModal {
       return;
     }
     this.rendering = true;
+    const token = ++this._renderToken;
 
     try {
       const page = await this.pdfDoc.getPage(this.currentPageNum);
+      if (token !== this._renderToken) return; // superado por otro open/hide/render
 
       // Escala base: ajustar la página al contenedor (con márgenes)
       const stageSize = this.getStageSize();
       const baseViewport = page.getViewport({ scale: 1, rotation: this.currentRotation });
-      const availW = stageSize.w * 0.9;
-      const availH = stageSize.h * 0.9;
-      const fitScale = Math.min(availW / baseViewport.width, availH / baseViewport.height);
+      const availW = stageSize.w > 0 ? stageSize.w * 0.9 : 1;
+      const availH = stageSize.h > 0 ? stageSize.h * 0.9 : 1;
+      this.fitScale = Math.min(availW / baseViewport.width, availH / baseViewport.height);
       const dpr = Math.max(1, window.devicePixelRatio || 1);
 
-      const renderScale = fitScale * dpr;
+      // Raster a la resolución exacta de pantalla: fit × zoom × dpr (con tope)
+      const maxScaleW = this.maxRender / baseViewport.width;
+      const maxScaleH = this.maxRender / baseViewport.height;
+      const renderScale = Math.min(this.fitScale * this.scale * dpr, maxScaleW, maxScaleH);
+
+      this.baseW = baseViewport.width * this.fitScale;
+      this.baseH = baseViewport.height * this.fitScale;
+
       const renderViewport = page.getViewport({ scale: renderScale, rotation: this.currentRotation });
-
-      this.baseW = renderViewport.width / dpr;
-      this.baseH = renderViewport.height / dpr;
-
       this.canvas.width = renderViewport.width;
       this.canvas.height = renderViewport.height;
 
@@ -299,9 +342,16 @@ class ZoomModal {
       };
 
       await page.render(renderContext).promise;
+      if (token !== this._renderToken) return; // no pintar ni tocar pan si quedó obsoleto
+      this.applyTransform();
     } catch (err) {
       console.error('Error al renderizar zoom:', err);
     } finally {
+      if (token !== this._renderToken) {
+        // Render superado: no liberar la bandera del render actual ni re-renderizar
+        this.pendingRender = false;
+        return;
+      }
       this.rendering = false;
       if (this.pendingRender) {
         this.pendingRender = false;

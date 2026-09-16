@@ -27,11 +27,56 @@ class EditorView {
     this.pageOrder = [];
     this.groups = [];
 
-    this.selectedPages = new Set(); // Set de originalIndex
+this.selectedPages = new Set(); // Set de originalIndex
     this.sortableInstance = null;
 
-    this.initElements();
+    // Cola de renders de miniaturas con concurrencia limitada
+    this._thumbQueue = [];
+    this._thumbInFlight = 0;
+    this._thumbMaxConcurrent = 4;
+
+this.initElements();
     this.bindEvents();
+    this.initTimelineScroll();
+  }
+
+  initTimelineScroll() {
+    const area = this.timelineContainer ? this.timelineContainer.closest('.timeline-area') : null;
+    if (!area) return;
+    this.timelineArea = area;
+
+    let drag = null;
+
+    // Arrastre sobre el espacio vacío de la tira para desplazarse en horizontal
+    area.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest('.page-card, .group-band, .btn-icon, .group-band-cat-select')) return;
+      drag = {
+        startX: e.clientX,
+        startScroll: area.scrollLeft,
+      };
+      area.classList.add('dragging-scroll');
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!drag) return;
+      area.scrollLeft = drag.startScroll - (e.clientX - drag.startX);
+      e.preventDefault();
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!drag) return;
+      drag = null;
+      area.classList.remove('dragging-scroll');
+    });
+
+    // Rueda del mouse: desplaza en horizontal cuando hay desborde
+    area.addEventListener('wheel', (e) => {
+      if (area.scrollWidth <= area.clientWidth) return;
+      e.preventDefault();
+      area.scrollLeft += e.deltaY + e.deltaX;
+    }, { passive: false });
   }
 
   initElements() {
@@ -490,20 +535,80 @@ document.addEventListener('keydown', (e) => {
     return card;
   }
 
-  async renderCardThumbnail(pageData, cardElement) {
+renderCardThumbnail(pageData, cardElement) {
     if (!this.pdfDoc) return;
-    try {
-      const page = await this.pdfDoc.getPage(pageData.originalIndex + 1);
-      const canvas = cardElement.querySelector('.page-thumb-canvas');
-      if (!canvas) return;
 
-      const viewport = page.getViewport({ scale: 0.3, rotation: pageData.rotation });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext('2d');
+    const cached = pageData._thumbCanvas && pageData._thumbKey === `${pageData.originalIndex}:${pageData.rotation}`
+      ? pageData._thumbCanvas
+      : null;
+
+    if (cached) {
+      this.drawThumbToCard(cached, cardElement);
+      return;
+    }
+    this.enqueueThumbRender(pageData.originalIndex);
+  }
+
+  drawThumbToCard(sourceCanvas, cardElement) {
+    const canvas = cardElement.querySelector('.page-thumb-canvas');
+    if (!canvas || !sourceCanvas) return;
+    canvas.width = sourceCanvas.width;
+    canvas.height = sourceCanvas.height;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(sourceCanvas, 0, 0);
+  }
+
+  enqueueThumbRender(pageIdx) {
+    this._thumbQueue.push(pageIdx);
+    this.pumpThumbQueue();
+  }
+
+  pumpThumbQueue() {
+    while (this._thumbInFlight < this._thumbMaxConcurrent && this._thumbQueue.length > 0) {
+      const idx = this._thumbQueue.shift();
+      this._thumbInFlight++;
+      this.renderThumbJob(idx).then(() => {
+        this._thumbInFlight--;
+        this.pumpThumbQueue();
+      });
+    }
+  }
+
+  async renderThumbJob(pageIdx) {
+    const pageData = this.pages[pageIdx];
+    if (!pageData || !this.pdfDoc) return;
+    try {
+      const page = await this.pdfDoc.getPage(pageIdx + 1);
+
+      // Escala necesaria para verse nítida al tamaño real × dpr (con tope)
+      const card = this.timelineContainer.querySelector(`.page-card[data-page-index="${pageIdx}"]`);
+      const wrapper = card ? card.querySelector('.page-thumbnail-wrapper') : null;
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      let targetW = 300;
+      if (wrapper) {
+        const rect = wrapper.getBoundingClientRect();
+        if (rect.width > 0) {
+          targetW = Math.min(300, Math.max(80, rect.width * dpr));
+        }
+      }
+
+      const base = page.getViewport({ scale: 1, rotation: pageData.rotation });
+      const viewport = page.getViewport({ scale: targetW / base.width, rotation: pageData.rotation });
+
+      const source = document.createElement('canvas');
+      source.width = viewport.width;
+      source.height = viewport.height;
+      const ctx = source.getContext('2d');
 
       await page.render({ canvasContext: ctx, viewport }).promise;
-} catch (err) {
+
+      pageData._thumbCanvas = source;
+      pageData._thumbKey = `${pageData.originalIndex}:${pageData.rotation}`;
+
+      const liveCard = this.timelineContainer.querySelector(`.page-card[data-page-index="${pageIdx}"]`);
+      if (liveCard) this.drawThumbToCard(source, liveCard);
+    } catch (err) {
       console.error('Error renderizando miniatura:', err);
     }
   }
