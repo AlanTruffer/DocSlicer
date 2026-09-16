@@ -25,7 +25,8 @@ backend/           Lógica de negocio (corre en proceso principal)
 
 frontend/          Proceso renderer (JS vanilla, sin paso de build)
   index.html       Archivo HTML único. Dos vistas: home + editor.
-  assets/js/       Libs vendor: lucide (iconos), sortable (drag-drop), pdfjs-dist (renderizado).
+  assets/vendor/   Libs de terceros (no tocar): lucide (iconos), sortable (drag-drop), pdfjs-dist (renderizado).
+  assets/js/       Solo pdfjsLoader.js (módulo ES que deja `window.pdfjsLib`).
   assets/css/      Bootstrap + app.css custom.
   views/           Módulos de la app (uno por archivo), todos conectados via globales `window.*`.
 ```

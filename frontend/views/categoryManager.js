@@ -79,6 +79,10 @@ class CategoryManager {
     return this.categories;
   }
 
+  static sortByName(categories) {
+    return [...categories].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+  }
+
   getDefaultFallback() {
     return [
       {
@@ -139,11 +143,11 @@ class CategoryManager {
     if (this.modalList) this.modalList.style.display = 'none';
   }
 
-  renderCategoryList() {
+renderCategoryList() {
     if (!this.categoryListContainer) return;
     this.categoryListContainer.innerHTML = '';
 
-    this.categories.forEach(cat => {
+    CategoryManager.sortByName(this.categories).forEach(cat => {
       const item = document.createElement('div');
       item.className = 'category-item';
       item.innerHTML = `

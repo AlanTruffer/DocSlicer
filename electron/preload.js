@@ -36,6 +36,9 @@ contextBridge.exposeInMainWorld('api', {
   // Lectura directa de archivo (usado para drag & drop)
   readFile: (filePath) => ipcRenderer.invoke('file:read', filePath),
 
+  // Verificar si un archivo existe en disco
+  fileExists: (filePath) => ipcRenderer.invoke('file:exists', filePath),
+
   // =============================================
   // Almacenamiento: Historial
   // =============================================

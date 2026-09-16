@@ -65,14 +65,18 @@ class SidePanel {
     if (this.noGroupsMsg) this.noGroupsMsg.style.display = 'none';
     if (this.btnExport) this.btnExport.disabled = false;
 
-    groups.forEach((group, groupIdx) => {
+groups.forEach((group, groupIdx) => {
       const groupItem = document.createElement('div');
       groupItem.className = 'group-item';
+      groupItem.setAttribute('data-group-id', group.id);
       groupItem.style.borderLeftColor = group.color || '#3b82f6';
 
-      // Category options
+// Category options (orden alfabético)
+      const sortedCategories = (window.CategoryManager && CategoryManager.sortByName)
+        ? CategoryManager.sortByName(categories)
+        : [...categories].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
       let catOptions = '';
-      categories.forEach(cat => {
+      sortedCategories.forEach(cat => {
         const selected = cat.id === group.categoryId ? 'selected' : '';
         catOptions += `<option value="${cat.id}" ${selected}>${cat.name}</option>`;
       });
@@ -153,7 +157,21 @@ class SidePanel {
       this.groupListContainer.appendChild(groupItem);
     });
 
-    if (window.lucide) window.lucide.createIcons({ root: this.groupListContainer });
+if (window.lucide) window.lucide.createIcons({ root: this.groupListContainer });
+  }
+
+  updateFilenamePreview(groupId) {
+    if (!this.groupListContainer) return;
+    const item = this.groupListContainer.querySelector(`.group-item[data-group-id="${groupId}"]`);
+    if (!item) return;
+    const group = (window.editorView && window.editorView.groups)
+      ? window.editorView.groups.find(g => g.id === groupId)
+      : null;
+    if (!group) return;
+    const categories = window.categoryManager ? window.categoryManager.categories : [];
+    const category = categories.find(c => c.id === group.categoryId) || categories[0];
+    const text = item.querySelector('.filename-text');
+    if (text) text.textContent = this.calculateFileName(group, category);
   }
 
   calculateFileName(group, category) {

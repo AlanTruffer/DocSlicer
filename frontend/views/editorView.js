@@ -82,14 +82,20 @@ class EditorView {
     }
 
     // Atajos de teclado en el editor
-    document.addEventListener('keydown', (e) => {
+document.addEventListener('keydown', (e) => {
       if (!this.isActive()) return;
 
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
         return;
       }
 
-      if (e.key === 'Delete' || e.key === 'Backspace') {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        this.groupSelectedPages();
+      } else if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        e.preventDefault();
+        this.rotateSelectedPages(e.key === 'ArrowRight' ? 90 : -90);
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
         this.toggleExcludeSelected();
       } else if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
         e.preventDefault();
@@ -310,7 +316,7 @@ class EditorView {
           });
         }
       }
-    } catch (err) {
+} catch (err) {
       console.warn('No se pudo guardar thumbnail en historial:', err);
     }
   }
@@ -318,14 +324,91 @@ class EditorView {
   renderTimeline() {
     if (!this.timelineContainer) return;
     this.timelineContainer.innerHTML = '';
-
     const categories = window.categoryManager ? window.categoryManager.categories : [];
+
+    // Emitir grupos como bandas visuales (una sola vez) y páginas sueltas individualmente
+    const emittedGroups = new Set();
 
     this.pageOrder.forEach((pageIdx) => {
       const pageData = this.pages[pageIdx];
-      const card = this.createPageCard(pageData, categories);
-      this.timelineContainer.appendChild(card);
-      this.renderCardThumbnail(pageData, card);
+      const groupId = pageData.groupId;
+      const group = groupId ? this.groups.find(g => g.id === groupId) : null;
+
+      if (group) {
+        if (emittedGroups.has(group.id)) return; // ya se renderizó la banda completa
+        emittedGroups.add(group.id);
+
+        const band = document.createElement('div');
+        band.className = 'group-band';
+        band.setAttribute('data-group-id', group.id);
+        band.style.setProperty('--group-color', group.color);
+
+        const cardsRow = document.createElement('div');
+        cardsRow.className = 'group-band-cards';
+
+        group.pageIndices.forEach(gIdx => {
+          if (!this.pages[gIdx]) return;
+          const gData = this.pages[gIdx];
+          const gCard = this.createPageCard(gData, categories);
+          cardsRow.appendChild(gCard);
+          this.renderCardThumbnail(gData, gCard);
+        });
+
+        band.appendChild(cardsRow);
+
+        // Regla inferior del corchete
+        const rule = document.createElement('div');
+        rule.className = 'group-band-rule';
+        band.appendChild(rule);
+
+        // Select de categoría centrado debajo del grupo
+        const selectRow = document.createElement('div');
+        selectRow.className = 'group-band-select';
+
+        const sortedCategories = (window.CategoryManager && CategoryManager.sortByName)
+          ? CategoryManager.sortByName(categories)
+          : [...categories].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+
+        let catOptions = '';
+        sortedCategories.forEach(c => {
+          const selected = c.id === group.categoryId ? 'selected' : '';
+          catOptions += `<option value="${c.id}" ${selected}>${c.name}</option>`;
+        });
+        if (catOptions === '') {
+          catOptions = '<option value="">Sin categorías</option>';
+        }
+
+        selectRow.innerHTML = `
+          <span class="group-band-swatch" style="background:${group.color}"></span>
+          <select class="group-band-cat-select" data-group-id="${group.id}" title="Categoría de este lote">
+            ${catOptions}
+          </select>
+          <span class="group-band-count">${group.pageIndices.length} pág.</span>
+        `;
+
+        const select = selectRow.querySelector('.group-band-cat-select');
+        if (select) {
+          select.addEventListener('change', (e) => {
+            e.stopPropagation();
+            this.updateGroupCategory(group.id, e.target.value);
+          });
+        }
+
+        band.appendChild(selectRow);
+        this.timelineContainer.appendChild(band);
+
+        // Click sobre la banda (fuera de cards y select) selecciona/deselecciona todo el lote
+        band.addEventListener('click', (e) => {
+          if (e.target.closest('.page-card')) return;
+          if (e.target.closest('.group-band-cat-select')) return;
+          if (e.target.closest('.btn-icon')) return;
+          this.toggleSelectGroup(group);
+        });
+      } else {
+        const card = this.createPageCard(pageData, categories);
+        this.timelineContainer.appendChild(card);
+        this.renderCardThumbnail(pageData, card);
+      }
     });
 
     this.initSortable();
@@ -349,30 +432,6 @@ class EditorView {
       card.style.borderStyle = 'solid';
     }
 
-    // Soporte inferior / banner del grupo en la línea de tiempo
-    let groupFooterHtml = '';
-    if (group) {
-      const currentCat = categories.find(c => c.id === group.categoryId) || categories[0];
-      const catName = currentCat ? currentCat.name : 'Categoría';
-
-      let catOptions = '';
-      categories.forEach(c => {
-        const selected = c.id === group.categoryId ? 'selected' : '';
-        catOptions += `<option value="${c.id}" ${selected}>${c.name}</option>`;
-      });
-
-      groupFooterHtml = `
-        <div class="timeline-group-footer" style="border-top: 2px solid ${group.color}; background: ${group.color}15;">
-          <div class="timeline-group-label-wrapper">
-            <span class="timeline-group-cat-title" style="color: ${group.color}" title="Categoría de este lote">${catName}</span>
-            <select class="timeline-group-cat-select" data-group-id="${group.id}" title="Cambiar categoría con un clic">
-              ${catOptions}
-            </select>
-          </div>
-        </div>
-      `;
-    }
-
     card.innerHTML = `
       <div class="page-header-info">
         <span class="page-num">Pág. ${pageData.originalIndex + 1}</span>
@@ -389,18 +448,17 @@ class EditorView {
           <i data-lucide="${pageData.excluded ? 'check' : 'trash-2'}"></i>
         </button>
       </div>
-      ${groupFooterHtml}
     `;
 
     // Click para seleccionar
     card.addEventListener('click', (e) => {
-      if (e.target.closest('.page-controls') || e.target.closest('.timeline-group-footer')) return;
+      if (e.target.closest('.page-controls')) return;
       this.handleCardClick(pageData.originalIndex, e);
     });
 
     // Doble click para Zoom
     card.addEventListener('dblclick', (e) => {
-      if (e.target.closest('.page-controls') || e.target.closest('.timeline-group-footer')) return;
+      if (e.target.closest('.page-controls')) return;
       if (window.zoomModal) {
         window.zoomModal.open(
           this.pdfDoc,
@@ -429,18 +487,6 @@ class EditorView {
       this.toggleExcludePage(pageData.originalIndex);
     });
 
-    // Cambio rápido de categoría desde la barra inferior de la línea de tiempo
-    const catSelect = card.querySelector('.timeline-group-cat-select');
-    if (catSelect && group) {
-      catSelect.addEventListener('change', (e) => {
-        e.stopPropagation();
-        this.updateGroupCategory(group.id, e.target.value);
-      });
-      catSelect.addEventListener('click', (e) => {
-        e.stopPropagation();
-      });
-    }
-
     return card;
   }
 
@@ -457,7 +503,7 @@ class EditorView {
       const ctx = canvas.getContext('2d');
 
       await page.render({ canvasContext: ctx, viewport }).promise;
-    } catch (err) {
+} catch (err) {
       console.error('Error renderizando miniatura:', err);
     }
   }
@@ -466,49 +512,119 @@ class EditorView {
     if (this.sortableInstance) {
       this.sortableInstance.destroy();
     }
+    if (this.bandSortables) {
+      this.bandSortables.forEach(s => s.destroy());
+    }
+    this.bandSortables = [];
 
     if (!this.timelineContainer || !window.Sortable) return;
 
-    this.sortableInstance = new window.Sortable(this.timelineContainer, {
+    const baseOptions = {
       animation: 200,
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
-      filter: '.btn-icon, .timeline-group-cat-select',
+      filter: '.btn-icon, .group-band-cat-select',
       preventOnFilter: false,
-      onEnd: (evt) => {
-        const oldIndex = evt.oldIndex;
-        const newIndex = evt.newIndex;
-        if (oldIndex === newIndex) return;
+      onEnd: (evt) => this.handleSortEnd(evt),
+    };
 
-        const previousOrder = [...this.pageOrder];
-        const movedItem = this.pageOrder.splice(oldIndex, 1)[0];
-        this.pageOrder.splice(newIndex, 0, movedItem);
+    // Nivel superior: páginas sueltas y bandas de grupo
+    this.sortableInstance = new window.Sortable(this.timelineContainer, {
+      ...baseOptions,
+      draggable: '.page-card, .group-band',
+      group: 'pages',
+    });
 
-        const newOrder = [...this.pageOrder];
+    // Nivel interno: reordenar páginas dentro de cada banda de grupo
+    this.timelineContainer.querySelectorAll('.group-band-cards').forEach(bandEl => {
+      const inner = new window.Sortable(bandEl, {
+        ...baseOptions,
+        draggable: '.page-card',
+        group: 'pages',
+      });
+      this.bandSortables.push(inner);
+    });
+  }
 
-        if (window.undoManager) {
-          window.undoManager.pushAction({
-            type: 'reorder',
-            description: `Reordenar página ${movedItem + 1}`,
-            undo: () => {
-              this.pageOrder = [...previousOrder];
-              this.renderTimeline();
-              this.syncGroupsPageOrder();
-              this.scheduleAutoSave();
-            },
-            redo: () => {
-              this.pageOrder = [...newOrder];
-              this.renderTimeline();
-              this.syncGroupsPageOrder();
-              this.scheduleAutoSave();
-            }
-          });
-        }
-
-        this.syncGroupsPageOrder();
-        this.scheduleAutoSave();
+  getDomPageOrder() {
+    const order = [];
+    if (!this.timelineContainer) return order;
+    Array.from(this.timelineContainer.children).forEach(el => {
+      if (el.classList.contains('page-card')) {
+        order.push(parseInt(el.getAttribute('data-page-index'), 10));
+      } else if (el.classList.contains('group-band')) {
+        el.querySelectorAll('.page-card').forEach(card => {
+          order.push(parseInt(card.getAttribute('data-page-index'), 10));
+        });
       }
     });
+    return order;
+  }
+
+  addPageToGroup(pageIdx, groupId) {
+    const group = this.groups.find(g => g.id === groupId);
+    if (!group || group.pageIndices.includes(pageIdx)) return;
+    group.pageIndices.push(pageIdx);
+    if (this.pages[pageIdx]) this.pages[pageIdx].groupId = groupId;
+  }
+
+  handleSortEnd(evt) {
+    const item = evt.item;
+    const toEl = evt.to && evt.to.el ? evt.to.el : null;
+    let membershipChanged = false;
+
+    // Si una card cruza el límite de una banda, actualizar su pertenencia al grupo
+    if (item && item.classList.contains('page-card') && toEl) {
+      const idx = parseInt(item.getAttribute('data-page-index'), 10);
+      const currentGroupId = this.pages[idx] ? this.pages[idx].groupId : null;
+      let newGroupId = currentGroupId;
+
+      if (toEl.classList.contains('group-band-cards')) {
+        const band = toEl.closest('.group-band');
+        newGroupId = band ? band.getAttribute('data-group-id') : null;
+      } else if (toEl === this.timelineContainer) {
+        newGroupId = null;
+      }
+
+      if (newGroupId !== currentGroupId) {
+        membershipChanged = true;
+        if (currentGroupId) this.removePageFromGroup(idx, currentGroupId);
+        if (newGroupId) this.addPageToGroup(idx, newGroupId);
+      }
+    }
+
+    const previousOrder = [...this.pageOrder];
+    const newOrder = this.getDomPageOrder();
+    const orderChanged = JSON.stringify(previousOrder) !== JSON.stringify(newOrder);
+
+    if (!orderChanged && !membershipChanged) return; // sin cambios reales
+
+    if (orderChanged) {
+      this.pageOrder = [...newOrder];
+
+      if (window.undoManager) {
+        window.undoManager.pushAction({
+          type: 'reorder',
+          description: 'Reordenar páginas',
+          undo: () => {
+            this.pageOrder = [...previousOrder];
+            this.renderTimeline();
+            this.syncGroupsPageOrder();
+            this.scheduleAutoSave();
+          },
+          redo: () => {
+            this.pageOrder = [...newOrder];
+            this.renderTimeline();
+            this.syncGroupsPageOrder();
+            this.scheduleAutoSave();
+          }
+        });
+      }
+    }
+
+    this.syncGroupsPageOrder();
+    this.scheduleAutoSave();
+    this.renderTimeline();
   }
 
   syncGroupsPageOrder() {
@@ -516,6 +632,15 @@ class EditorView {
       g.pageIndices.sort((a, b) => this.pageOrder.indexOf(a) - this.pageOrder.indexOf(b));
     });
     this.updateSidePanel();
+  }
+
+  toggleSelectGroup(group) {
+    const allSelected = group.pageIndices.length > 0 && group.pageIndices.every(idx => this.selectedPages.has(idx));
+    this.selectedPages.clear();
+    if (!allSelected) {
+      group.pageIndices.forEach(idx => this.selectedPages.add(idx));
+    }
+    this.updateSelectionUI();
   }
 
   handleCardClick(pageIdx, event) {
@@ -583,7 +708,7 @@ class EditorView {
   toggleSelectAll() {
     if (this.selectedPages.size === this.pages.filter(p => !p.excluded).length) {
       this.selectedPages.clear();
-    } else {
+} else {
       this.selectAll();
     }
     this.updateSelectionUI();
@@ -610,6 +735,45 @@ class EditorView {
         redo: () => {
           page.rotation = newRotation;
           this.refreshPageCardThumbnail(pageIdx);
+          this.scheduleAutoSave();
+        }
+      });
+    }
+  }
+
+  // Rota en bloque todas las páginas seleccionadas (atajo Shift + Flechas)
+  rotateSelectedPages(delta) {
+    const selected = Array.from(this.selectedPages).filter(idx => this.pages[idx]);
+    if (selected.length === 0) return;
+
+    const prevRotations = {};
+    selected.forEach(idx => { prevRotations[idx] = this.pages[idx].rotation; });
+
+    selected.forEach(idx => {
+      const page = this.pages[idx];
+      page.rotation = (page.rotation + delta + 360) % 360;
+    });
+
+    selected.forEach(idx => this.refreshPageCardThumbnail(idx));
+    this.scheduleAutoSave();
+
+    if (window.undoManager) {
+      const dir = delta > 0 ? 'derecha' : 'izquierda';
+      window.undoManager.pushAction({
+        type: 'rotate',
+        description: `Rotar ${selected.length} página(s) a la ${dir}`,
+        undo: () => {
+          selected.forEach(idx => {
+            this.pages[idx].rotation = prevRotations[idx];
+            this.refreshPageCardThumbnail(idx);
+          });
+          this.scheduleAutoSave();
+        },
+        redo: () => {
+          selected.forEach(idx => {
+            this.pages[idx].rotation = (prevRotations[idx] + delta + 360) % 360;
+            this.refreshPageCardThumbnail(idx);
+          });
           this.scheduleAutoSave();
         }
       });
@@ -682,8 +846,20 @@ class EditorView {
   groupSelectedPages() {
     if (this.selectedPages.size === 0) return;
 
-    const selectedSorted = this.pageOrder.filter(idx => this.selectedPages.has(idx) && !this.pages[idx].excluded);
+const selectedSorted = this.pageOrder.filter(idx => this.selectedPages.has(idx) && !this.pages[idx].excluded);
     if (selectedSorted.length === 0) return;
+
+    // Si la selección es EXACTAMENTE un lote completo → desagrupar ese lote
+    const exactGroup = this.groups.find(g =>
+      g.pageIndices.length === selectedSorted.length &&
+      g.pageIndices.every(idx => this.selectedPages.has(idx))
+    );
+    if (exactGroup) {
+      this.selectedPages.clear();
+      this.ungroup(exactGroup.id);
+      if (window.toast) window.toast.success('Lote desagrupado');
+      return;
+    }
 
     selectedSorted.forEach(idx => {
       if (this.pages[idx].groupId) {
@@ -797,15 +973,14 @@ class EditorView {
     this.scheduleAutoSave();
   }
 
-  updateGroupVariable(groupId, varName, val) {
+updateGroupVariable(groupId, varName, val) {
     const group = this.groups.find(g => g.id === groupId);
     if (!group) return;
     if (!group.variableValues) group.variableValues = {};
     group.variableValues[varName] = val;
 
     if (window.sidePanel) {
-      const categories = window.categoryManager ? window.categoryManager.categories : [];
-      window.sidePanel.renderGroups(this.groups, categories);
+      window.sidePanel.updateFilenamePreview(groupId);
     }
     this.scheduleAutoSave();
   }

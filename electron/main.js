@@ -3,7 +3,7 @@
 // Configura la ventana principal (sin marco), inicializa los servicios del backend
 // y registra todos los handlers IPC para la comunicación con el renderer.
 
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const StorageManager = require('../backend/storageManager');
@@ -24,9 +24,15 @@ function createWindow() {
   const iconPng = path.join(__dirname, '..', 'frontend', 'assets', 'icon.png');
   const appIcon = fs.existsSync(iconIco) ? iconIco : iconPng;
 
+  // Adaptar tamaño de ventana al 90% del área de trabajo del monitor activo
+  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const { width: workW, height: workH } = display.workArea;
+  const windowWidth  = Math.max(Math.min(Math.round(workW * 0.9), workW), 900);
+  const windowHeight = Math.max(Math.min(Math.round(workH * 0.9), workH), 650);
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowWidth,
+    height: windowHeight,
     minWidth: 900,
     minHeight: 650,
     frame: false,
@@ -159,6 +165,15 @@ function registerIpcHandlers() {
       };
     } catch (err) {
       return { error: err.message };
+    }
+  });
+
+  // Verificar si un archivo existe en disco (historial)
+  ipcMain.handle('file:exists', async (event, filePath) => {
+    try {
+      return { exists: fs.existsSync(filePath) };
+    } catch (err) {
+      return { exists: false, error: err.message };
     }
   });
 

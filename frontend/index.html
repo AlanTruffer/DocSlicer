@@ -30,6 +30,9 @@
   </div>
 
   <!-- =================== VIEW: HOME =================== -->
+  <button class="btn-help" id="btn-help" title="Ver cómo funciona DocSlicer">
+    <i data-lucide="help-circle"></i>
+  </button>
   <div id="view-home" class="view active">
     <div class="home-container">
       <div class="home-header">
@@ -161,7 +164,10 @@
     <button class="zoom-nav zoom-nav-prev" id="zoom-prev"><i data-lucide="chevron-left"></i></button>
     <button class="zoom-nav zoom-nav-next" id="zoom-next"><i data-lucide="chevron-right"></i></button>
     <div class="zoom-content">
-      <canvas id="zoom-canvas"></canvas>
+      <div class="zoom-stage">
+        <canvas id="zoom-canvas"></canvas>
+      </div>
+      <span class="zoom-level" id="zoom-level">100%</span>
     </div>
   </div>
 
@@ -172,12 +178,12 @@
         <h3 id="category-modal-title">Gestionar Categorías</h3>
         <button class="btn-icon" id="category-modal-close"><i data-lucide="x"></i></button>
       </div>
+      <button class="btn category-add-btn" id="btn-add-category">
+        <i data-lucide="plus"></i> Nueva Categoría
+      </button>
       <div class="category-list" id="category-list">
         <!-- Ítems de categoría renderizados por JS -->
       </div>
-      <button class="btn" id="btn-add-category">
-        <i data-lucide="plus"></i> Nueva Categoría
-      </button>
     </div>
   </div>
 
@@ -216,12 +222,56 @@
     </div>
   </div>
 
+  <!-- =================== HELP MODAL (CÓMO FUNCIONA) =================== -->
+  <div id="help-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content help-modal">
+      <div class="modal-header">
+        <h3>Cómo funciona DocSlicer</h3>
+        <button class="btn-icon" id="help-modal-close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="help-steps">
+        <div class="help-step">
+          <div class="help-step-num">1</div>
+          <div class="help-step-body">
+            <div class="help-step-title">Cargá tu PDF</div>
+            <p>Arrastrá el archivo a la pantalla o hacé clic para elegirlo desde tu equipo.</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-num">2</div>
+          <div class="help-step-body">
+            <div class="help-step-title">Organizá las páginas</div>
+            <p>Seleccioná páginas y agrupalas con <strong>Espacio</strong>. Girá con <strong>Shift + ← / →</strong>, reordená con drag y excluí las que no necesites con <strong>Supr</strong>.</p>
+          </div>
+        </div>
+        <div class="help-step">
+          <div class="help-step-num">3</div>
+          <div class="help-step-body">
+            <div class="help-step-title">Exportá los lotes</div>
+            <p>Elegí la carpeta de salida y DocSlicer genera un PDF por cada grupo, con el nombre según su categoría.</p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="help-modal-done">Entendido</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =================== LOADING OVERLAY =================== -->
+  <div id="loading-overlay" class="loading-overlay" style="display: none;">
+    <div class="loading-box">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Cargando documento&hellip;</div>
+    </div>
+  </div>
+
   <!-- Contenedor de notificaciones toast -->
   <div id="toast-container"></div>
 
   <script type="module" src="assets/js/pdfjsLoader.js"></script>
-  <script src="assets/js/lucide.min.js"></script>
-  <script src="assets/js/sortable.min.js"></script>
+  <script src="assets/vendor/lucide.min.js"></script>
+  <script src="assets/vendor/sortable.min.js"></script>
   <script src="views/toastNotification.js"></script>
   <script src="views/undoManager.js"></script>
   <script src="views/categoryManager.js"></script>

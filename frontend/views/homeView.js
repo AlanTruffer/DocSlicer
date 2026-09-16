@@ -54,13 +54,14 @@ class HomeView {
         }
       });
     }
-  }
+}
 
   async loadRecentHistory() {
     try {
       if (!window.api || !window.api.getHistory) return;
       const history = await window.api.getHistory();
       if (history && history.length > 0) {
+        await this.checkHistoryFiles(history);
         this.renderHistory(history);
         this.recentSection.style.display = 'block';
       } else {
@@ -69,6 +70,21 @@ class HomeView {
     } catch (err) {
       console.error('Error al cargar historial:', err);
     }
+  }
+
+  // Marca con flag missing a las entradas del historial cuyo archivo ya no existe en disco
+  async checkHistoryFiles(items) {
+    if (!window.api || !window.api.fileExists) return items;
+    await Promise.all(items.map(async (item) => {
+      if (!item.filePath) return;
+      try {
+        const res = await window.api.fileExists(item.filePath);
+        item.missing = !(res && res.exists);
+      } catch (e) {
+        item.missing = false;
+      }
+    }));
+    return items;
   }
 
   renderHistory(items) {
@@ -86,7 +102,7 @@ class HomeView {
         if (btnResume) {
           btnResume.onclick = () => this.openRecentFile(mostRecentWithDraft.filePath);
         }
-      } else {
+} else {
         resumeBanner.style.display = 'none';
       }
     }
@@ -95,20 +111,33 @@ class HomeView {
       const card = document.createElement('div');
       card.className = 'history-card';
       if (item.hasDraft) card.classList.add('has-draft');
-      
+      if (item.missing) card.classList.add('history-card-missing');
+
       const thumbSrc = item.thumbnailPath ? `file://${item.thumbnailPath.replace(/\\/g, '/')}` : 'assets/icon.png';
+
+      const missingBadge = item.missing
+        ? '<span class="history-card-missing-badge"><i data-lucide="file-question"></i> No se encontró</span>'
+        : '';
 
       card.innerHTML = `
         <div class="history-thumb-container">
+          ${missingBadge}
           <img src="${thumbSrc}" alt="${item.fileName}" class="history-thumb" onerror="this.src='assets/icon.png'">
           ${item.hasDraft ? '<span class="history-card-draft-badge"><i data-lucide="edit-3"></i> En edición</span>' : ''}
         </div>
         <div class="history-info">
           <span class="history-title" title="${item.fileName}">${item.fileName}</span>
+          ${item.missing ? '<span class="history-missing-hint">El archivo fue movido o eliminado</span>' : ''}
         </div>
       `;
 
-      card.addEventListener('click', () => this.openRecentFile(item.filePath));
+      if (!item.missing) {
+        card.addEventListener('click', () => this.openRecentFile(item.filePath));
+      } else {
+        card.addEventListener('click', () => {
+          if (window.toast) window.toast.warning('Este archivo ya no existe en su ubicación original');
+        });
+      }
       this.recentGrid.appendChild(card);
     });
 
@@ -180,14 +209,31 @@ class HomeView {
         return;
       }
       await this.loadDocument(fileData);
-    } catch (err) {
+} catch (err) {
       console.error('Error al abrir archivo reciente:', err);
       if (window.toast) window.toast.error('No se pudo abrir el archivo reciente');
     }
   }
 
+  showLoading() {
+    this._loadingEl = document.getElementById('loading-overlay');
+    if (this._loadingEl) {
+      this._loadingEl.style.display = 'flex';
+      // Forzar cursor de carga sobre toda la app mientras se procesa
+      document.body.style.cursor = 'progress';
+    }
+  }
+
+  hideLoading() {
+    if (this._loadingEl) {
+      this._loadingEl.style.display = 'none';
+    }
+    document.body.style.cursor = '';
+  }
+
   async loadDocument(fileData) {
     try {
+      this.showLoading();
       if (window.editorView) {
         await window.editorView.loadPdf(fileData);
       }
@@ -197,6 +243,8 @@ class HomeView {
     } catch (err) {
       console.error('Error al cargar documento en editor:', err);
       if (window.toast) window.toast.error('Error al procesar las páginas del PDF');
+    } finally {
+      this.hideLoading();
     }
   }
 }
