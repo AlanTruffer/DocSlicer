@@ -384,13 +384,19 @@ document.addEventListener('keydown', (e) => {
     }
 
     if (Array.isArray(draft.groups)) {
-      this.groups = draft.groups.map(g => ({
-        id: g.id,
-        color: g.color,
-        pageIndices: [...g.pageIndices],
-        categoryId: g.categoryId,
-        variableValues: { ...(g.variableValues || {}) }
-      }));
+      let hasDeletedCategoryReference = false;
+      this.groups = draft.groups.map(g => {
+        const categoryExists = g.categoryId && window.categoryManager?.getCategoryById(g.categoryId);
+        if (g.categoryId && !categoryExists) hasDeletedCategoryReference = true;
+        return {
+          id: g.id,
+          color: g.color,
+          pageIndices: [...g.pageIndices],
+          categoryId: categoryExists ? g.categoryId : '',
+          variableValues: { ...(g.variableValues || {}) }
+        };
+      });
+      if (hasDeletedCategoryReference) this.scheduleAutoSave();
 
       this.groups.forEach(g => {
         g.pageIndices.forEach(idx => {
@@ -502,18 +508,18 @@ document.addEventListener('keydown', (e) => {
         const selectRow = document.createElement('div');
         selectRow.className = 'group-band-select';
 
+        const groupCategories = window.categoryManager
+          ? window.categoryManager.getCategoriesForGroup(group.categoryId)
+          : categories;
         const sortedCategories = (window.CategoryManager && CategoryManager.sortByName)
-          ? CategoryManager.sortByName(categories)
-          : [...categories].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+          ? CategoryManager.sortByName(groupCategories)
+          : [...groupCategories].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
 
-        let catOptions = '';
+        let catOptions = `<option value="" ${group.categoryId ? '' : 'selected'}>----</option>`;
         sortedCategories.forEach(c => {
           const selected = c.id === group.categoryId ? 'selected' : '';
           catOptions += `<option value="${c.id}" ${selected}>${c.name}</option>`;
         });
-        if (catOptions === '') {
-          catOptions = '<option value="">Sin categorías</option>';
-        }
 
         selectRow.innerHTML = `
           <span class="group-band-swatch" style="background:${group.color}"></span>
@@ -1122,7 +1128,7 @@ const selectedSorted = this.pageOrder.filter(idx => this.selectedPages.has(idx) 
     const color = this.groupColors[this.groups.length % this.groupColors.length];
     
     const categories = window.categoryManager ? window.categoryManager.categories : [];
-    const defaultCat = categories.length > 0 ? categories[0].id : 'resolucion';
+    const defaultCat = categories.length > 0 ? categories[0].id : '';
 
     const newGroup = {
       id: groupId,
@@ -1253,7 +1259,11 @@ updateGroupVariable(groupId, varName, val) {
     this.groups.forEach(g => {
       if (g.pageIndices.length === 0) return;
 
-      const category = categories.find(c => c.id === g.categoryId) || categories[0];
+      const category = g.categoryId
+        ? (window.categoryManager
+          ? window.categoryManager.getCategoryById(g.categoryId)
+          : categories.find(c => c.id === g.categoryId))
+        : null;
       const fileName = window.sidePanel ? window.sidePanel.calculateFileName(g, category) : 'documento.pdf';
 
       const rotations = {};

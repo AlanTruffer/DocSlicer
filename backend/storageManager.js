@@ -195,34 +195,75 @@ class StorageManager {
   // ─────────────────────────────────────────────
 
   /**
-   * Obtiene las categorías guardadas. Si el archivo no existe,
-   * devuelve las categorías por defecto.
-   * @returns {Array} Array de categorías
+   * Obtiene grupos de categorías. Los archivos con el formato anterior
+   * (un array plano) se migran al grupo General al leerlos.
+   * @returns {{ activeGroupId: string, groups: Array }}
    */
   getCategories() {
     try {
       if (!fs.existsSync(this.categoriesFile)) {
-        return this.getDefaultCategories();
+        return this.createDefaultCategoryGroups();
       }
       const data = fs.readFileSync(this.categoriesFile, 'utf-8');
       const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : this.getDefaultCategories();
+      const normalized = this.normalizeCategoryGroups(parsed);
+
+      // Migrate the old flat category array the first time it is read.
+      if (Array.isArray(parsed)) this.saveCategories(normalized);
+      return normalized;
     } catch (err) {
       console.error('Error al leer categorías:', err.message);
-      return this.getDefaultCategories();
+      return this.createDefaultCategoryGroups();
     }
   }
 
   /**
-   * Guarda las categorías en disco.
-   * @param {Array} categories - Array de categorías a guardar
+   * Guarda los grupos de categorías en disco; también acepta el array plano
+   * antiguo para mantener la compatibilidad con una migración en curso.
+   * @param {{ activeGroupId: string, groups: Array }|Array} categories
    */
   saveCategories(categories) {
     try {
-      fs.writeFileSync(this.categoriesFile, JSON.stringify(categories, null, 2), 'utf-8');
+      const normalized = this.normalizeCategoryGroups(categories);
+      fs.writeFileSync(this.categoriesFile, JSON.stringify(normalized, null, 2), 'utf-8');
     } catch (err) {
       console.error('Error al guardar categorías:', err.message);
     }
+  }
+
+  createDefaultCategoryGroups(categories = this.getDefaultCategories()) {
+    return {
+      activeGroupId: 'category_group_general',
+      groups: [{
+        id: 'category_group_general',
+        name: 'General',
+        categories
+      }]
+    };
+  }
+
+  normalizeCategoryGroups(data) {
+    if (Array.isArray(data)) return this.createDefaultCategoryGroups(data);
+
+    if (!data || !Array.isArray(data.groups)) {
+      return this.createDefaultCategoryGroups();
+    }
+
+    const groups = data.groups
+      .filter(group => group && typeof group.id === 'string' && typeof group.name === 'string')
+      .map(group => ({
+        id: group.id,
+        name: group.name.trim() || 'Sin nombre',
+        categories: Array.isArray(group.categories) ? group.categories : []
+      }));
+
+    if (groups.length === 0) return this.createDefaultCategoryGroups();
+
+    const activeGroupId = groups.some(group => group.id === data.activeGroupId)
+      ? data.activeGroupId
+      : groups[0].id;
+
+    return { activeGroupId, groups };
   }
 
   /**

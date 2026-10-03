@@ -373,12 +373,13 @@ img {
    4. VISTA 2: EDITOR DE DOCUMENTO Y CATEGORIZACIÓN
    ============================================================ */
 .editor-header {
-  height: 3.7143rem;
+  min-height: 3.7143rem;
   background: var(--bg-panel);
   padding: 0 1.1429rem;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.5714rem;
   align-items: center;
-  justify-content: space-between;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   z-index: 10;
@@ -389,6 +390,69 @@ img {
   align-items: center;
   gap: 0.8571rem;
   min-width: 0;
+  justify-self: start;
+}
+
+.editor-category-switch {
+  display: flex;
+  min-width: 9rem;
+  max-width: min(28vw, 22rem);
+  align-items: center;
+  justify-content: center;
+  gap: 0.3571rem;
+  padding: 0.1429rem 0.2857rem;
+  background: var(--bg-deep);
+  border: 1px solid var(--border);
+  border-radius: 0.5714rem;
+}
+
+.editor-category-caption {
+  color: var(--text-muted);
+  font-size: var(--font-micro);
+  white-space: nowrap;
+}
+
+.editor-category-group-name {
+  min-width: 3.5rem;
+  max-width: 12rem;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: var(--font-body);
+  font-weight: 600;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.editor-category-nav-btn {
+  display: flex;
+  width: 1.7143rem;
+  height: 1.7143rem;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0.3571rem;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.editor-category-nav-btn:hover:not(:disabled) {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.editor-category-nav-btn:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.editor-category-nav-btn svg {
+  width: 1rem;
+  height: 1rem;
 }
 
 .editor-filename {
@@ -405,6 +469,7 @@ img {
   display: flex;
   align-items: center;
   gap: 6px;
+  justify-self: end;
 }
 
 /* Contador de páginas seleccionadas */
@@ -881,10 +946,60 @@ img {
   width: 100%;
 }
 
+.category-group-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4286rem;
+  margin-bottom: 0.7143rem;
+}
+
+.category-group-controls > label {
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  font-weight: 500;
+}
+
+.category-group-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2857rem;
+}
+
+.category-group-actions select {
+  flex: 1;
+  min-width: 0;
+}
+
+.category-group-actions .btn-icon {
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+
+.category-group-actions .btn-icon:hover {
+  border-color: var(--border-focus);
+  color: var(--text-primary);
+}
+
+.category-group-actions .btn-delete:hover {
+  border-color: var(--error);
+  color: var(--error);
+  background: rgba(239, 68, 68, 0.12);
+}
+
 .category-list {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 0.7143rem;
+}
+
+.category-list-empty {
+  grid-column: 1 / -1;
+  padding: 1.1429rem 0.8571rem;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: 0.5714rem;
 }
 
 .category-item {
@@ -954,7 +1069,13 @@ img {
 .variable-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: max(10px, 0.7143rem);
+}
+
+#cat-variables-list {
+  display: flex;
+  flex-direction: column;
+  gap: max(10px, 0.7143rem);
 }
 
 .variable-row input {
@@ -1185,6 +1306,25 @@ img {
 .swal2-popup.ds-confirm .swal2-html-container {
   max-width: 24rem;
   margin-inline: auto;
+}
+
+.swal2-popup.ds-confirm .swal2-input-label {
+  display: block;
+  width: 100%;
+  max-width: 20rem;
+  margin: 0 auto;
+  color: var(--text-secondary);
+  font-size: var(--font-body);
+  line-height: 1.35;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.swal2-popup.ds-confirm .swal2-input {
+  width: 100%;
+  max-width: 20rem;
+  box-sizing: border-box;
+  margin: 0.5rem auto 0;
 }
 
 /* Ícono vectorial centrado con trazo coherente con Lucide. */

@@ -72,16 +72,23 @@ groups.forEach((group, groupIdx) => {
       groupItem.style.borderLeftColor = group.color || '#3b82f6';
 
 // Category options (orden alfabético)
+      const groupCategories = window.categoryManager
+        ? window.categoryManager.getCategoriesForGroup(group.categoryId)
+        : categories;
       const sortedCategories = (window.CategoryManager && CategoryManager.sortByName)
-        ? CategoryManager.sortByName(categories)
-        : [...categories].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
-      let catOptions = '';
+        ? CategoryManager.sortByName(groupCategories)
+        : [...groupCategories].sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+      let catOptions = `<option value="" ${group.categoryId ? '' : 'selected'}>----</option>`;
       sortedCategories.forEach(cat => {
         const selected = cat.id === group.categoryId ? 'selected' : '';
         catOptions += `<option value="${cat.id}" ${selected}>${cat.name}</option>`;
       });
 
-      const currentCategory = categories.find(c => c.id === group.categoryId) || categories[0];
+      const currentCategory = group.categoryId
+        ? (window.categoryManager
+          ? window.categoryManager.getCategoryById(group.categoryId)
+          : categories.find(c => c.id === group.categoryId))
+        : null;
 
       // Dynamic variables fields
       let varsHtml = '';
@@ -99,7 +106,9 @@ groups.forEach((group, groupIdx) => {
         });
       }
 
-      const generatedFileName = this.calculateFileName(group, currentCategory);
+      const generatedFileName = currentCategory
+        ? this.calculateFileName(group, currentCategory)
+        : 'Seleccioná una categoría';
 
       // Pages summary list
       const pageNumbers = group.pageIndices.map(p => p + 1).join(', ');
@@ -168,10 +177,17 @@ if (window.lucide) window.lucide.createIcons({ root: this.groupListContainer });
       ? window.editorView.groups.find(g => g.id === groupId)
       : null;
     if (!group) return;
-    const categories = window.categoryManager ? window.categoryManager.categories : [];
-    const category = categories.find(c => c.id === group.categoryId) || categories[0];
+    const categoryManager = window.categoryManager;
+    const categories = categoryManager ? categoryManager.categories : [];
+    const category = group.categoryId
+      ? (categoryManager
+        ? categoryManager.getCategoryById(group.categoryId)
+        : categories.find(c => c.id === group.categoryId))
+      : null;
     const text = item.querySelector('.filename-text');
-    if (text) text.textContent = this.calculateFileName(group, category);
+    if (text) text.textContent = category
+      ? this.calculateFileName(group, category)
+      : 'Seleccioná una categoría';
   }
 
   calculateFileName(group, category) {
@@ -223,6 +239,18 @@ if (window.lucide) window.lucide.createIcons({ root: this.groupListContainer });
 
   async handleExportClick() {
     if (!window.editorView) return;
+    const categoryManager = window.categoryManager;
+    const unassignedGroups = window.editorView.groups.filter(group =>
+      group.pageIndices.length > 0 && (!group.categoryId || !categoryManager?.getCategoryById(group.categoryId))
+    );
+    if (unassignedGroups.length > 0) {
+      const message = unassignedGroups.length === 1
+        ? 'Falta seleccionar la categoría de un lote antes de exportar.'
+        : `Falta seleccionar la categoría de ${unassignedGroups.length} lotes antes de exportar.`;
+      if (window.toast) window.toast.warning(message);
+      return;
+    }
+
     const plan = window.editorView.getExportPlan();
     if (!plan || plan.groups.length === 0) {
       if (window.toast) window.toast.warning('No hay grupos definidos para exportar.');

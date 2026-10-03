@@ -90,6 +90,16 @@
         </div>
         <span class="editor-filename-badge" id="editor-filename" title="Archivo original cargado">documento.pdf</span>
       </div>
+      <div class="editor-category-switch" role="group" aria-label="Grupo de categorías">
+        <button id="btn-category-group-prev" class="editor-category-nav-btn" type="button" title="Grupo anterior" aria-label="Grupo anterior">
+          <i data-lucide="chevron-left"></i>
+        </button>
+        <span class="editor-category-caption">Categorías</span>
+        <span id="editor-category-group-name" class="editor-category-group-name" aria-live="polite">General</span>
+        <button id="btn-category-group-next" class="editor-category-nav-btn" type="button" title="Grupo siguiente" aria-label="Grupo siguiente">
+          <i data-lucide="chevron-right"></i>
+        </button>
+      </div>
       <div class="editor-header-right">
         <button class="btn-icon" id="btn-undo" title="Deshacer (Ctrl+Z)">
           <i data-lucide="undo-2"></i>
@@ -178,6 +188,15 @@
       <div class="modal-header">
         <h3 id="category-modal-title">Gestionar Categorías</h3>
         <button class="btn-icon" id="category-modal-close"><i data-lucide="x"></i></button>
+      </div>
+      <div class="category-group-controls">
+        <label for="category-group-select">Grupo de categorías</label>
+        <div class="category-group-actions">
+          <select id="category-group-select" aria-label="Grupo de categorías"></select>
+          <button class="btn-icon" id="btn-add-category-group" type="button" title="Crear grupo" aria-label="Crear grupo"><i data-lucide="plus"></i></button>
+          <button class="btn-icon" id="btn-rename-category-group" type="button" title="Renombrar grupo" aria-label="Renombrar grupo"><i data-lucide="edit-3"></i></button>
+          <button class="btn-icon btn-delete" id="btn-delete-category-group" type="button" title="Eliminar grupo" aria-label="Eliminar grupo"><i data-lucide="trash-2"></i></button>
+        </div>
       </div>
       <button class="btn category-add-btn" id="btn-add-category">
         <i data-lucide="plus"></i> Nueva Categoría

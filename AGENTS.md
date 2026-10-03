@@ -89,7 +89,7 @@ Todo lo persistente vive en `app.getPath('userData')`, fuera del árbol del proy
 ```
 userData/
   history.json          máx 5 entradas
-  categories.json       si no existe → 4 categorías por defecto
+  categories.json       grupos de categorías y grupo activo; General trae 4 por defecto
   drafts/<md5(path)>.json
   thumbnails/<md5(path)>.png
 ```
@@ -126,6 +126,8 @@ Tokens de diseño en `:root` (`--bg-deep`, `--accent`, `--text-primary`, `--font
 
 ### 13. La ventana es frameless
 `frame: false` + `titleBarStyle: 'hidden'`. `#titlebar` tiene `-webkit-app-region: drag` y sus hijos `no-drag`. Los botones llaman a `window.api.minimizeWindow/maximizeWindow/closeWindow`. Si agregás elementos interactivos a la titlebar, acordate del `no-drag` o la ventana no los deja pulsar.
+
+El control `#editor-category-switch` vive en `.editor-header`, junto al prefijo, y cambia el grupo activo recorriendo `categoryManager.categoryGroups`; sus flechas deben mantenerse sincronizadas con `#category-group-select`.
 
 `#titlebar` va en `z-index: 1100`, **por encima de `.modal-overlay` (1000) y sus hijos (1010)**: si no, el `backdrop-filter: blur(8px)` del overlay difumina la barra y el usuario pierde minimizar / maximizar / cerrar con un modal abierto. Y por debajo de los toasts (2000) y del loading overlay (5000). Si tocás cualquiera de esos cuatro z-index, revisá la pila completa.
 
@@ -202,10 +204,15 @@ Doble click en una card abre `window.zoomModal` (con `pdfDoc`, número de págin
 
 **Orden global**: `pageOrder: number[]` — los índices en el orden visual de la línea de tiempo. **El orden de las páginas dentro de un PDF exportado sale de acá, no del índice original.**
 
-**Grupos / lotes**: `{ id, color, pageIndices[], categoryId, variableValues{} }`. El color se saca de `editorView.groupColors` (6 colores, asignados por posición: `groups.length % 6`).
+**Grupos / lotes**: `{ id, color, pageIndices[], categoryId, variableValues{} }`. `categoryId: ''` representa `----` (categoría pendiente); `variableValues` se conserva al cambiar la categoría. El color se saca de `editorView.groupColors` (6 colores, asignados por posición: `groups.length % 6`).
 
 **Categorías**: `{ id, name, prefix, variables: [{ name, placeholder }], template }`.
-- `variables[].name` se normaliza a MAYÚSCULAS y solo `[A-Z0-9_]` al guardar.
+- Se guardan dentro de grupos de categorías en `categories.json`, junto con `activeGroupId`. `categoryManager.categories` contiene las categorías del grupo activo; `getAllCategories()` y `getCategoryById()` resuelven también categorías de los demás grupos para preservar las asignaciones de lotes abiertos.
+- El formato antiguo de `categories.json` (un array plano) se migra al grupo predeterminado `General` al leerlo. No vuelvas a guardar únicamente el array plano.
+- Cambiar el grupo activo filtra las categorías disponibles y pone todos los lotes abiertos en `categoryId: ''`; también autoguarda el borrador. Conservá páginas y `variableValues`.
+- El selector de categoría incluye `----`. Lotes con páginas sin `categoryId` válido bloquean la exportación antes de abrir el selector de carpeta; el borrador se sigue autoguardando.
+- Eliminar un grupo elimina sus categorías. El diálogo exige escribir exactamente `CONFIRMAR BORRADO` y pulsar Aceptar; los lotes que referían a esas categorías quedan sin categoría. Siempre debe quedar al menos un grupo.
+- `variables[].name` se normaliza a NFC y MAYÚSCULAS; solo admite `[A-ZÁÉÍÓÚÜÑ0-9_]` al guardar.
 - `placeholder` es doble uso: placeholder del input **y** valor por defecto del nombre del archivo.
 - No se puede borrar la última categoría.
 - Todos los selects de categoría se ordenan alfabéticamente con `CategoryManager.sortByName` (locale `es`, `sensitivity: 'base'`).
