@@ -103,6 +103,25 @@ class StorageManager {
     }
   }
 
+  /**
+   * Elimina una entrada del historial por su filePath.
+   * No toca el archivo original: solo la referencia desde la app.
+   * @param {string} filePath - Ruta del archivo a quitar del historial
+   * @returns {boolean} true si se quitó, false si no estaba en el historial
+   */
+  removeFromHistory(filePath) {
+    try {
+      const history = this.getHistory();
+      const filtered = history.filter((item) => item.filePath !== filePath);
+      if (filtered.length === history.length) return false;
+      this.saveHistory(filtered);
+      return true;
+    } catch (err) {
+      console.error('Error al quitar entrada del historial:', err.message);
+      return false;
+    }
+  }
+
   // ─────────────────────────────────────────────
   // Borradores y Autoguardado de Sesión
   // ─────────────────────────────────────────────

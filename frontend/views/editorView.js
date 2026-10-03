@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Vista Editor: Línea de Tiempo, Reordenar (SortableJS), Rotaciones, Selección, Agrupamiento y Autoguardado
  */
 class EditorView {
@@ -35,9 +35,10 @@ this.selectedPages = new Set(); // Set de originalIndex
     this._thumbInFlight = 0;
     this._thumbMaxConcurrent = 4;
 
-this.initElements();
+    this.initElements();
     this.bindEvents();
     this.initTimelineScroll();
+    this.initAutoScroll();
   }
 
   initTimelineScroll() {
@@ -77,6 +78,75 @@ this.initElements();
       e.preventDefault();
       area.scrollLeft += e.deltaY + e.deltaX;
     }, { passive: false });
+  }
+
+  // ==============================================================
+  // Auto-scroll en bordes del visor durante el arrastre
+  // ==============================================================
+
+  initAutoScroll() {
+    this._autoScrollSpeed = 0;
+    this._autoScrollRaf = null;
+  }
+
+  _startAutoScroll(speed) {
+    this._autoScrollSpeed = speed;
+    if (!this._autoScrollRaf) {
+      const step = () => {
+        if (!this.timelineArea || this._autoScrollSpeed === 0) {
+          this._autoScrollRaf = null;
+          return;
+        }
+        this.timelineArea.scrollLeft += this._autoScrollSpeed;
+        this.updatePageNumbersFromDom();
+        this._autoScrollRaf = requestAnimationFrame(step);
+      };
+      this._autoScrollRaf = requestAnimationFrame(step);
+    }
+  }
+
+  _stopAutoScroll() {
+    this._autoScrollSpeed = 0;
+    if (this._autoScrollRaf) {
+      cancelAnimationFrame(this._autoScrollRaf);
+      this._autoScrollRaf = null;
+    }
+  }
+
+  _checkEdgeAutoScroll(clientX) {
+    if (!this.timelineArea) return;
+    const rect = this.timelineArea.getBoundingClientRect();
+    const edgeThreshold = 100; // px desde el borde
+    const maxSpeed = 18; // px por cuadro
+
+    if (clientX < rect.left + edgeThreshold) {
+      const dist = Math.max(0, clientX - rect.left);
+      const factor = 1 - (dist / edgeThreshold);
+      this._startAutoScroll(-Math.max(3, Math.round(factor * maxSpeed)));
+    } else if (clientX > rect.right - edgeThreshold) {
+      const dist = Math.max(0, rect.right - clientX);
+      const factor = 1 - (dist / edgeThreshold);
+      this._startAutoScroll(Math.max(3, Math.round(factor * maxSpeed)));
+    } else {
+      this._stopAutoScroll();
+    }
+  }
+
+  /**
+   * Actualiza en caliente el número visible (Pág. X) de todas las tarjetas
+   * según su posición secuencial actual en el visor.
+   */
+  updatePageNumbersFromDom() {
+    if (!this.timelineContainer) return;
+    const cards = Array.from(this.timelineContainer.querySelectorAll('.page-card'));
+    cards.forEach((card, idx) => {
+      const numSpan = card.querySelector('.page-num');
+      if (numSpan) {
+        const origIdx = parseInt(card.getAttribute('data-page-index'), 10);
+        numSpan.textContent = `Pág. ${idx + 1}`;
+        numSpan.title = `Página original: ${origIdx + 1}`;
+      }
+    });
   }
 
   initElements() {
@@ -134,12 +204,22 @@ document.addEventListener('keydown', (e) => {
         return;
       }
 
+      // Con un modal abierto las teclas single-letter (Q/E) no deben llegar
+      // al editor: se escribirían en los inputs del diálogo de categorías.
+      if (this.isModalOpen()) return;
+
       if (e.code === 'Space') {
         e.preventDefault();
         this.groupSelectedPages();
       } else if (e.shiftKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
         e.preventDefault();
         this.rotateSelectedPages(e.key === 'ArrowRight' ? 90 : -90);
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'q' || e.key === 'Q')) {
+        e.preventDefault();
+        this.rotateSelectedPages(-90);
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+        this.rotateSelectedPages(90);
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         this.toggleExcludeSelected();
       } else if (e.ctrlKey && (e.key === 'a' || e.key === 'A')) {
@@ -168,6 +248,19 @@ document.addEventListener('keydown', (e) => {
 
   isActive() {
     return this.viewElement && this.viewElement.classList.contains('active');
+  }
+
+  /**
+   * ¿Hay algún modal abierto sobre la app?
+   * Los modales de la app se abren y cierran con `style.display`, así que
+   * basta con buscar el primero que esté visible.
+   */
+  isModalOpen() {
+    const overlays = document.querySelectorAll('.modal-overlay');
+    for (const el of overlays) {
+      if (el.style.display && el.style.display !== 'none') return true;
+    }
+    return false;
   }
 
   getLegajoPrefix() {
@@ -261,7 +354,7 @@ document.addEventListener('keydown', (e) => {
     this.updateSidePanel();
 
     if (restored && window.toast) {
-      window.toast.success('Se recuperó tu sesión guardada pendiente');
+      window.toast.success('Se recuperó tu sesión guardada pendiente.');
     }
   }
 
@@ -401,7 +494,6 @@ document.addEventListener('keydown', (e) => {
 
         band.appendChild(cardsRow);
 
-        // Regla inferior del corchete
         const rule = document.createElement('div');
         rule.className = 'group-band-rule';
         band.appendChild(rule);
@@ -477,9 +569,12 @@ document.addEventListener('keydown', (e) => {
       card.style.borderStyle = 'solid';
     }
 
+    const currentPos = this.pageOrder ? (this.pageOrder.indexOf(pageData.originalIndex) + 1) : (pageData.originalIndex + 1);
+    const origPos = pageData.originalIndex + 1;
+
     card.innerHTML = `
       <div class="page-header-info">
-        <span class="page-num">Pág. ${pageData.originalIndex + 1}</span>
+        <span class="page-num" title="Página original: ${origPos}">Pág. ${currentPos}</span>
         ${group ? `<span class="page-group-tag" style="background-color: ${group.color}">G</span>` : ''}
       </div>
       <div class="page-thumbnail-wrapper">
@@ -628,19 +723,38 @@ renderCardThumbnail(pageData, cardElement) {
       animation: 200,
       ghostClass: 'sortable-ghost',
       chosenClass: 'sortable-chosen',
-      filter: '.btn-icon, .group-band-cat-select',
+      filter: '.btn-icon, .group-band-cat-select, .group-band .page-card',
       preventOnFilter: false,
-      onEnd: (evt) => this.handleSortEnd(evt),
+      scroll: this.timelineArea,
+      scrollSensitivity: 100,
+      scrollSpeed: 18,
+      bubbleScroll: true,
+      onMove: (evt) => {
+        if (evt.originalEvent) {
+          this._checkEdgeAutoScroll(evt.originalEvent.clientX);
+        }
+        return true;
+      },
+      onChange: () => {
+        this.updatePageNumbersFromDom();
+      },
+      onEnd: (evt) => {
+        this._stopAutoScroll();
+        queueMicrotask(() => this.handleSortEnd(evt));
+      },
     };
 
-    // Nivel superior: páginas sueltas y bandas de grupo
+    // Nivel superior: solo páginas sueltas. Las bandas nunca se mueven.
+    // Las páginas dentro de bandas las gestiona su Sortable interno.
     this.sortableInstance = new window.Sortable(this.timelineContainer, {
       ...baseOptions,
-      draggable: '.page-card, .group-band',
+      draggable: '.page-card',
+      filter: '.btn-icon, .group-band-cat-select, .group-band .page-card',
       group: 'pages',
     });
 
-    // Nivel interno: reordenar páginas dentro de cada banda de grupo
+    // Nivel interno: reordenar páginas y permitir transferencias entre
+    // bandas existentes y el nivel raíz.
     this.timelineContainer.querySelectorAll('.group-band-cards').forEach(bandEl => {
       const inner = new window.Sortable(bandEl, {
         ...baseOptions,
@@ -666,70 +780,71 @@ renderCardThumbnail(pageData, cardElement) {
     return order;
   }
 
-  addPageToGroup(pageIdx, groupId) {
-    const group = this.groups.find(g => g.id === groupId);
-    if (!group || group.pageIndices.includes(pageIdx)) return;
-    group.pageIndices.push(pageIdx);
-    if (this.pages[pageIdx]) this.pages[pageIdx].groupId = groupId;
-  }
-
   handleSortEnd(evt) {
-    const item = evt.item;
-    const toEl = evt.to && evt.to.el ? evt.to.el : null;
-    let membershipChanged = false;
-
-    // Si una card cruza el límite de una banda, actualizar su pertenencia al grupo
-    if (item && item.classList.contains('page-card') && toEl) {
-      const idx = parseInt(item.getAttribute('data-page-index'), 10);
-      const currentGroupId = this.pages[idx] ? this.pages[idx].groupId : null;
-      let newGroupId = currentGroupId;
-
-      if (toEl.classList.contains('group-band-cards')) {
-        const band = toEl.closest('.group-band');
-        newGroupId = band ? band.getAttribute('data-group-id') : null;
-      } else if (toEl === this.timelineContainer) {
-        newGroupId = null;
-      }
-
-      if (newGroupId !== currentGroupId) {
-        membershipChanged = true;
-        if (currentGroupId) this.removePageFromGroup(idx, currentGroupId);
-        if (newGroupId) this.addPageToGroup(idx, newGroupId);
-      }
-    }
-
-    const previousOrder = [...this.pageOrder];
+    const previous = this.captureArrangementState();
     const newOrder = this.getDomPageOrder();
-    const orderChanged = JSON.stringify(previousOrder) !== JSON.stringify(newOrder);
+    this.updatePageNumbersFromDom();
+    this.pageOrder = [...newOrder];
+    this.syncGroupsFromDom();
+    const next = this.captureArrangementState();
 
-    if (!orderChanged && !membershipChanged) return; // sin cambios reales
+    if (JSON.stringify(previous) === JSON.stringify(next)) return;
 
-    if (orderChanged) {
-      this.pageOrder = [...newOrder];
-
-      if (window.undoManager) {
-        window.undoManager.pushAction({
-          type: 'reorder',
-          description: 'Reordenar páginas',
-          undo: () => {
-            this.pageOrder = [...previousOrder];
-            this.renderTimeline();
-            this.syncGroupsPageOrder();
-            this.scheduleAutoSave();
-          },
-          redo: () => {
-            this.pageOrder = [...newOrder];
-            this.renderTimeline();
-            this.syncGroupsPageOrder();
-            this.scheduleAutoSave();
-          }
-        });
-      }
-    }
-
+    this.renderTimeline();
     this.syncGroupsPageOrder();
     this.scheduleAutoSave();
+
+    if (window.undoManager) {
+      window.undoManager.pushAction({
+        type: 'reorder',
+        description: 'Mover página',
+        undo: () => this.restoreArrangementState(previous),
+        redo: () => this.restoreArrangementState(next),
+      });
+    }
+  }
+
+  captureArrangementState() {
+    return {
+      pageOrder: [...this.pageOrder],
+      groups: this.groups.map(group => ({
+        ...group,
+        pageIndices: [...group.pageIndices],
+        variableValues: { ...(group.variableValues || {}) },
+      })),
+    };
+  }
+
+  restoreArrangementState(state) {
+    this.pageOrder = [...state.pageOrder];
+    this.groups = state.groups.map(group => ({
+      ...group,
+      pageIndices: [...group.pageIndices],
+      variableValues: { ...(group.variableValues || {}) },
+    }));
+    const membership = new Map();
+    this.groups.forEach(group => group.pageIndices.forEach(pageIdx => membership.set(pageIdx, group.id)));
+    this.pages.forEach(page => { page.groupId = membership.get(page.originalIndex) || null; });
     this.renderTimeline();
+    this.syncGroupsPageOrder();
+    this.scheduleAutoSave();
+  }
+
+  syncGroupsFromDom() {
+    const membership = new Map();
+    const groupById = new Map(this.groups.map(group => [group.id, group]));
+
+    this.timelineContainer.querySelectorAll('.group-band').forEach(band => {
+      const group = groupById.get(band.getAttribute('data-group-id'));
+      if (!group) return;
+      group.pageIndices = Array.from(band.querySelectorAll('.group-band-cards > .page-card'))
+        .map(card => Number(card.getAttribute('data-page-index')));
+      group.pageIndices.forEach(pageIdx => membership.set(pageIdx, group.id));
+    });
+
+    // A lot that loses its last page is removed, matching exclusion/ungroup behavior.
+    this.groups = this.groups.filter(group => group.pageIndices.length > 0);
+    this.pages.forEach(page => { page.groupId = membership.get(page.originalIndex) || null; });
   }
 
   syncGroupsPageOrder() {
@@ -846,10 +961,40 @@ renderCardThumbnail(pageData, cardElement) {
     }
   }
 
-  // Rota en bloque todas las páginas seleccionadas (atajo Shift + Flechas)
+  /**
+   * Verifica si la selección actual puede rotarse en bloque.
+   * Varias páginas solo rotan juntas si pertenecen al mismo lote, o si
+   * ninguna tiene lote asignado. Una mezcla de ambos no es coherente como
+   * operación: el lote es la unidad de exportación.
+   *
+   * @returns {{ ok: boolean, reason?: string }}
+   */
+  canRotateSelection() {
+    const selected = Array.from(this.selectedPages).filter(idx => this.pages[idx]);
+    if (selected.length <= 1) return { ok: true };
+
+    const groupIds = new Set(selected.map(idx => this.pages[idx].groupId || null));
+    if (groupIds.size === 1) return { ok: true };
+
+    const hasGrouped = groupIds.has(null) === false;
+    return {
+      ok: false,
+      reason: hasGrouped
+        ? 'La selección mezcla páginas de distintos lotes. Rotá un lote a la vez.'
+        : 'La selección mezcla páginas con y sin lote. Agrupá las sueltas o rotá un lote a la vez.'
+    };
+  }
+
+  // Rota en bloque todas las páginas seleccionadas (atajos Shift + Flechas, Q, E)
   rotateSelectedPages(delta) {
     const selected = Array.from(this.selectedPages).filter(idx => this.pages[idx]);
     if (selected.length === 0) return;
+
+    const check = this.canRotateSelection();
+    if (!check.ok) {
+      if (window.toast) window.toast.warning(check.reason, 3200);
+      return;
+    }
 
     const prevRotations = {};
     selected.forEach(idx => { prevRotations[idx] = this.pages[idx].rotation; });
@@ -934,7 +1079,8 @@ renderCardThumbnail(pageData, cardElement) {
     this.renderTimeline();
     this.updateSidePanel();
     this.scheduleAutoSave();
-    if (window.toast) window.toast.show(`${pagesToExclude.length} página(s) excluida(s)`, 'warning', 2500);
+    const count = pagesToExclude.length;
+    if (window.toast) window.toast.show(`Se excluy${count === 1 ? 'ó 1 página' : `eron ${count} páginas`}.`, 'warning', 2500);
   }
 
   refreshPageCardThumbnail(pageIdx) {
@@ -962,7 +1108,7 @@ const selectedSorted = this.pageOrder.filter(idx => this.selectedPages.has(idx) 
     if (exactGroup) {
       this.selectedPages.clear();
       this.ungroup(exactGroup.id);
-      if (window.toast) window.toast.success('Lote desagrupado');
+      if (window.toast) window.toast.success('El lote se desagrupó correctamente.');
       return;
     }
 
@@ -997,7 +1143,8 @@ const selectedSorted = this.pageOrder.filter(idx => this.selectedPages.has(idx) 
     this.updateSidePanel();
     this.scheduleAutoSave();
 
-    if (window.toast) window.toast.success(`Grupo creado con ${selectedSorted.length} página(s)`);
+    const count = selectedSorted.length;
+    if (window.toast) window.toast.success(`Se creó el grupo con ${count} página${count === 1 ? '' : 's'}.`);
 
     if (window.undoManager) {
       window.undoManager.pushAction({

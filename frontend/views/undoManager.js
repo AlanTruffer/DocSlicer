@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gestor de Historial de Acciones (Undo / Redo) para DocSlicer
  */
 class UndoManager {
@@ -43,7 +43,7 @@ class UndoManager {
     this.redoStack.push(action);
     this._notify();
     if (window.toast && action.description) {
-      window.toast.show(`Deshecho: ${action.description}`, 'warning', 2000);
+      window.toast.show(`Se deshizo: ${action.description}.`, 'warning', 2000);
     }
   }
 
@@ -56,7 +56,7 @@ class UndoManager {
     this.undoStack.push(action);
     this._notify();
     if (window.toast && action.description) {
-      window.toast.show(`Rehecho: ${action.description}`, 'success', 2000);
+      window.toast.show(`Se rehizo: ${action.description}.`, 'success', 2000);
     }
   }
 

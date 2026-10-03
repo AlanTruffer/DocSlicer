@@ -231,7 +231,7 @@ if (window.lucide) window.lucide.createIcons({ root: this.groupListContainer });
 
     try {
       if (!window.api || !window.api.selectFolder) {
-        if (window.toast) window.toast.error('API de Electron no disponible');
+        if (window.toast) window.toast.error('La API de Electron no se encuentra disponible.');
         return;
       }
 
@@ -255,7 +255,8 @@ if (window.lucide) window.lucide.createIcons({ root: this.groupListContainer });
 
       if (result && result.success) {
         if (window.toast) {
-          window.toast.success(`¡Se exportaron ${result.filesCreated.length} archivos con éxito!`);
+          const count = result.filesCreated.length;
+          window.toast.success(`Se export${count === 1 ? 'ó 1 archivo' : `aron ${count} archivos`} con éxito.`);
         }
         // Limpiar el borrador guardado ya que fue exportado con éxito
         if (plan.filePath && window.api && window.api.clearDraft) {
@@ -263,11 +264,11 @@ if (window.lucide) window.lucide.createIcons({ root: this.groupListContainer });
         }
       } else {
         const errorMsg = result && result.errors ? result.errors.join(', ') : 'Ocurrió un error en la exportación';
-        if (window.toast) window.toast.error(`Error al exportar: ${errorMsg}`);
+        if (window.toast) window.toast.error(`Ocurrió un error al exportar: ${errorMsg}.`);
       }
     } catch (err) {
       console.error('Error durante exportación:', err);
-      if (window.toast) window.toast.error(`Fallo inesperado: ${err.message}`);
+      if (window.toast) window.toast.error(`Ocurrió un fallo inesperado: ${err.message}.`);
     } finally {
       this.btnExport.disabled = false;
       this.btnExport.innerHTML = `<i data-lucide="download"></i> Exportar PDFs`;

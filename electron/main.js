@@ -186,6 +186,15 @@ function registerIpcHandlers() {
     storage.addToHistory(entry);
   });
 
+  // Quita una entrada del historial. NO borra el archivo PDF del disco.
+  // También limpia el thumbnail y el borrador asociados, que son caché de la app.
+  ipcMain.handle('storage:removeFromHistory', (event, filePath) => {
+    const removed = storage.removeFromHistory(filePath);
+    const thumbRemoved = thumbnailGen.deleteThumbnail(filePath);
+    storage.clearDraft(filePath);
+    return { removed, thumbRemoved };
+  });
+
   // =============================================
   // Almacenamiento: Categorías
   // =============================================

@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Gestor y Administrador de Categorías y Plantillas de Nombres
  */
 class CategoryManager {
@@ -130,7 +130,7 @@ class CategoryManager {
       this.notifyChange();
     } catch (err) {
       console.error('Error al persistir categorías:', err);
-      if (window.toast) window.toast.error('Error al guardar categorías');
+      if (window.toast) window.toast.error('Ocurrió un error al guardar las categorías.');
     }
   }
 
@@ -265,7 +265,7 @@ renderCategoryList() {
   async saveCurrentCategory() {
     const name = this.inputName.value.trim();
     if (!name) {
-      if (window.toast) window.toast.warning('Ingresá un nombre para la categoría');
+      if (window.toast) window.toast.warning('Ingresá un nombre para la categoría.');
       return;
     }
 
@@ -296,20 +296,20 @@ renderCategoryList() {
     }
 
     await this.persistCategories();
-    if (window.toast) window.toast.success('Categoría guardada correctamente');
+    if (window.toast) window.toast.success('La categoría se guardó correctamente.');
     this.hideEditModal();
     this.renderCategoryList();
   }
 
   async deleteCategory(catId) {
     if (this.categories.length <= 1) {
-      if (window.toast) window.toast.warning('No podés eliminar la única categoría');
+      if (window.toast) window.toast.warning('No podés eliminar la única categoría.');
       return;
     }
     this.categories = this.categories.filter(c => c.id !== catId);
     await this.persistCategories();
     this.renderCategoryList();
-    if (window.toast) window.toast.success('Categoría eliminada');
+    if (window.toast) window.toast.success('La categoría se eliminó correctamente.');
   }
 
   getCategoryById(id) {

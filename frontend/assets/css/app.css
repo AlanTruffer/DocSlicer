@@ -108,7 +108,10 @@ img {
   user-select: none;
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
-  z-index: 900;
+  /* Por encima de los modales (1000) y sus elementos internos (1010), para
+     que abrir un diálogo no difumine la barra ni le robe el foco a los
+     botones de ventana. Por debajo de toasts (2000) y loading (5000). */
+  z-index: 1100;
 }
 
 .titlebar-logo {
@@ -1064,53 +1067,234 @@ img {
 }
 
 /* ============================================================
-   7. NOTIFICACIONES TOAST
+   7. NOTIFICACIONES (SweetAlert2)
+   Los colores y la forma salen de acá, no del JS. SweetAlert2
+   se carga antes que esta hoja, así que estas reglas ganan.
    ============================================================ */
-#toast-container {
-  position: fixed;
-  bottom: 1.7143rem;
-  right: 1.7143rem;
+
+/* ---------- Toast: barra de estado a la izquierda ----------
+   El toast no lleva ícono. SweetAlert2 v11.26 dibuja los íconos como SVG
+   inline con colores fijos (#a5dc86 y friends), así que forzarlos a un
+   glifo chico significa pelear contra el markup. La barra de 4px al
+   borde izquierdo dice lo mismo y es el vocabulario que la app ya tenía. */
+
+.swal2-toast-container {
   z-index: 2000;
-  display: flex;
-  flex-direction: column-reverse;
-  gap: 0.7143rem;
-  max-width: 27.1429rem;
-  pointer-events: none;
 }
 
-.toast {
+/* El ancho del toast lo fija el contenedor, que SweetAlert2 clava en 360px.
+   Hay que pisarlo ahí: el popup siempre es 100% del contenedor. */
+.swal2-toast-shown .swal2-container {
+  width: 24rem;
+  max-width: calc(100vw - 2rem);
+}
+
+.swal2-toast.ds-toast {
   background: var(--bg-panel);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
   border-radius: 0.5714rem;
-  padding: 0.8571rem 1.2857rem;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  color: var(--text-primary);
+  padding: 0;
+}
+
+.swal2-toast.ds-toast--success { border-left-color: var(--success); }
+.swal2-toast.ds-toast--error   { border-left-color: var(--error); }
+.swal2-toast.ds-toast--warning { border-left-color: var(--warning); }
+
+.swal2-toast.ds-toast .swal2-html-container {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  width: 100%;
+}
+
+.ds-toast-content {
   display: flex;
   align-items: center;
-  gap: 0.8571rem;
-  color: var(--text-primary);
-  animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  border-left: 4px solid var(--border);
-  pointer-events: auto;
+  gap: 0.75rem;
+  width: 100%;
 }
 
-.toast.success { border-left-color: var(--success); }
-.toast.error { border-left-color: var(--error); }
-.toast.warning { border-left-color: var(--warning); }
+.ds-toast-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 1.35rem;
+  height: 1.35rem;
+  aspect-ratio: 1 / 1;
+}
 
-.toast-message {
+.ds-toast-icon svg {
+  width: 100%;
+  height: 100%;
+  flex-shrink: 0;
+  display: block;
+}
+
+.ds-toast-icon--success { color: var(--success); }
+.ds-toast-icon--error   { color: var(--error); }
+.ds-toast-icon--warning { color: var(--warning); }
+
+.ds-toast-message {
   font-size: var(--font-body);
+  font-weight: 500;
+  color: var(--text-primary);
   line-height: 1.4;
+  word-break: break-word;
 }
 
-@keyframes slideInRight {
-  from { transform: translateX(110%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+/* ---------- Diálogo de confirmación ---------- */
+.swal2-popup.ds-confirm {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 0.8571rem;
+  color: var(--text-primary);
+  padding: 1.7143rem;
+  max-width: 28rem;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
 }
 
-@keyframes slideOutRight {
-  from { transform: translateX(0); opacity: 1; }
-  to { transform: translateX(110%); opacity: 0; }
+.swal2-popup.ds-confirm .swal2-title {
+  font-size: var(--font-title);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.4286rem;
+  padding: 0;
 }
+
+.swal2-popup.ds-confirm .swal2-html-container {
+  margin: 0;
+}
+
+.swal2-popup.ds-confirm .swal2-text {
+  font-size: var(--font-body);
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+  text-align: center;
+}
+
+.swal2-popup.ds-confirm .swal2-title,
+.swal2-popup.ds-confirm .swal2-html-container {
+  text-align: center;
+}
+
+.swal2-popup.ds-confirm .swal2-html-container {
+  max-width: 24rem;
+  margin-inline: auto;
+}
+
+/* Ícono vectorial centrado con trazo coherente con Lucide. */
+.swal2-popup.ds-confirm .swal2-icon {
+  box-sizing: border-box;
+  width: 3.5rem;
+  min-width: 3.5rem;
+  height: 3.5rem;
+  min-height: 3.5rem;
+  aspect-ratio: 1 / 1;
+  margin: 0 auto 1rem;
+  border-width: 2px;
+  border-style: solid;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  font-family: inherit;
+  zoom: 1;
+  background: color-mix(in srgb, var(--error) 12%, transparent);
+}
+
+.swal2-popup.ds-confirm .swal2-icon .ds-confirm-icon {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.swal2-popup.ds-confirm .swal2-icon .swal2-icon-content {
+  font-size: 1.75rem;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+}
+
+.swal2-popup.ds-confirm .swal2-actions {
+  margin: 1.4286rem 0 0;
+  gap: 0.5714rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.swal2-popup.ds-confirm .swal2-confirm,
+.swal2-popup.ds-confirm .swal2-cancel {
+  margin: 0;
+  flex: 0 0 auto;
+  min-width: 7rem;
+}
+
+.swal2-backdrop {
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+}
+
+/* ---------- Botones ---------- */
+.swal2-popup .ds-btn {
+  font-family: inherit;
+  font-size: var(--font-body);
+  font-weight: 500;
+  padding: 0.5rem 1.1429rem;
+  border-radius: 0.5rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  margin: 0;
+}
+
+.swal2-popup .ds-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.swal2-popup .ds-btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.swal2-popup .ds-btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.swal2-popup .ds-btn-danger {
+  background: var(--error);
+  color: #ffffff;
+}
+
+.swal2-popup .ds-btn-danger:hover {
+  background: #dc2626;
+}
+
+.swal2-popup .ds-btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border);
+}
+
+.swal2-popup .ds-btn-ghost:hover {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+}
+
 
 @keyframes fadeIn {
   from { opacity: 0; }
@@ -1383,6 +1567,54 @@ select option {
 
 .history-card.has-draft {
   border-color: rgba(245, 158, 11, 0.5);
+}
+
+/* Botón para quitar el acceso directo. Aparece en hover para no competir
+   con la miniatura, y se queda visible al recibir foco por teclado. */
+.history-card-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 1.7143rem;
+  height: 1.7143rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.4286rem;
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  z-index: 3;
+}
+
+.history-card-remove svg {
+  width: 0.8571rem;
+  height: 0.8571rem;
+}
+
+.history-card:hover .history-card-remove,
+.history-card-remove:focus-visible {
+  opacity: 1;
+}
+
+.history-card-remove:hover {
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.history-card-remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* El badge de borrador y el de "no se encontró" ceden el lugar al botón */
+.history-card:hover .history-card-draft-badge,
+.history-card:hover .history-card-missing-badge {
+  opacity: 0;
 }
 
 /* Prefijo de legajo editable en barra superior del editor */

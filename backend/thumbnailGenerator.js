@@ -57,6 +57,26 @@ class ThumbnailGenerator {
   }
 
   /**
+   * Elimina el thumbnail asociado a un archivo, si existe.
+   * @param {string} filePath - Ruta completa del archivo PDF original
+   * @returns {boolean} true si se eliminó, false si no había nada que borrar
+   */
+  deleteThumbnail(filePath) {
+    try {
+      const hash = this.getFileHash(filePath);
+      const thumbnailPath = path.join(this.thumbnailsDir, `${hash}.png`);
+      if (fs.existsSync(thumbnailPath)) {
+        fs.unlinkSync(thumbnailPath);
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error al eliminar thumbnail:', err.message);
+      return false;
+    }
+  }
+
+  /**
    * Obtiene la ruta del thumbnail para un archivo dado.
    * @param {string} filePath - Ruta completa del archivo PDF original
    * @returns {string} Ruta completa al archivo PNG del thumbnail

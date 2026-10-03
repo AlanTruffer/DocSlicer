@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld('api', {
   getHistory: () => ipcRenderer.invoke('storage:getHistory'),
   addToHistory: (entry) => ipcRenderer.invoke('storage:addToHistory', entry),
 
+  // Quita una entrada del historial junto con su miniatura y su borrador.
+  // No borra el archivo PDF original.
+  removeFromHistory: (filePath) => ipcRenderer.invoke('storage:removeFromHistory', filePath),
+
   // =============================================
   // Almacenamiento: Categorías
   // =============================================
